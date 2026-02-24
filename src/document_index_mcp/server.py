@@ -102,7 +102,8 @@ async def list_tools():
             name="index_document",
             description=(
                 "Parse and index a document file into the search database. "
-                "Supports PDF, TXT, MD. Returns doc_id for subsequent queries."
+                "Supports PDF, DOCX, XLSX, CSV, PPTX, HTML, TXT, MD, and image files. "
+                "Returns doc_id for subsequent queries."
             ),
             inputSchema={
                 "type": "object",

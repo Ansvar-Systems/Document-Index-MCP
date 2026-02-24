@@ -28,6 +28,7 @@ from .parsers import (
 logger = logging.getLogger(__name__)
 
 MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE_MB", "50")) * 1024 * 1024
+ALLOWED_UPLOAD_DIR = os.getenv("ALLOWED_UPLOAD_DIR", "")
 
 _PARSER_MAP = {
     ".pdf": PDFParser,
@@ -60,7 +61,13 @@ async def index_document_tool(
     file_path: str, db_path: Path
 ) -> dict[str, Any]:
     """Parse and index a document into SQLite with FTS5."""
-    fp = Path(file_path)
+    fp = Path(file_path).resolve()
+    if ALLOWED_UPLOAD_DIR:
+        allowed = Path(ALLOWED_UPLOAD_DIR).resolve()
+        if not str(fp).startswith(str(allowed) + os.sep) and fp != allowed:
+            raise ValueError(
+                f"Access denied: file must be under {ALLOWED_UPLOAD_DIR}"
+            )
     if not fp.exists():
         raise FileNotFoundError(f"File not found: {fp.name}")
     if fp.stat().st_size > MAX_FILE_SIZE:

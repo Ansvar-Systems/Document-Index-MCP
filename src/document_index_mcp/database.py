@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS documents (
 
 CREATE TABLE IF NOT EXISTS sections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    doc_id TEXT NOT NULL REFERENCES documents(doc_id),
+    doc_id TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
     section_ref TEXT NOT NULL,
     title TEXT,
     content TEXT NOT NULL,
