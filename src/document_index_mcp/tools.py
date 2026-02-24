@@ -20,7 +20,10 @@ from typing import Any, Optional
 
 from .database import Database
 from .fts import build_fts_query
-from .parsers import PDFParser, TextParser
+from .parsers import (
+    PDFParser, TextParser, DOCXParser, XLSXParser,
+    CSVParser, PPTXParser, HTMLParser, ImageParser,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,20 @@ _PARSER_MAP = {
     ".pdf": PDFParser,
     ".txt": TextParser,
     ".md": TextParser,
+    ".docx": DOCXParser,
+    ".xlsx": XLSXParser,
+    ".csv": CSVParser,
+    ".pptx": PPTXParser,
+    ".html": HTMLParser,
+    ".htm": HTMLParser,
+    ".png": ImageParser,
+    ".jpg": ImageParser,
+    ".jpeg": ImageParser,
+    ".tiff": ImageParser,
+    ".tif": ImageParser,
+    ".bmp": ImageParser,
+    ".gif": ImageParser,
+    ".webp": ImageParser,
 }
 
 _METADATA_TEMPLATE = {
