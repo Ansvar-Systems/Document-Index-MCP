@@ -280,7 +280,9 @@ class DOCXParser(BaseParser):
 
         # Use TextParser to detect sections (it handles section_ref)
         from .text_parser import TextParser
-        tmp_file = Path(tempfile.mktemp(suffix=".txt"))
+        tmp = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
+        tmp_file = Path(tmp.name)
+        tmp.close()
         try:
             tmp_file.write_text(raw_text, encoding="utf-8")
             text_parser = TextParser()

@@ -81,7 +81,7 @@ class Database:
     async def initialize(self) -> None:
         """Create all tables, indexes, FTS5 virtual table, and triggers."""
         async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("PRAGMA journal_mode = DELETE")
+            await db.execute("PRAGMA journal_mode = WAL")
             await db.execute("PRAGMA foreign_keys = ON")
             await db.executescript(SCHEMA)
             await db.commit()

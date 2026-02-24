@@ -63,34 +63,6 @@ def table_to_markdown(table: Table) -> str:
     return '\n'.join(markdown_lines)
 
 
-def extract_tables_as_markdown(doc) -> List[tuple[int, str]]:
-    """Extract all tables from a docx Document and convert to Markdown.
-
-    Returns a list of (paragraph_index, markdown_table) tuples indicating
-    where each table appears in the document flow.
-
-    Args:
-        doc: python-docx Document object
-
-    Returns:
-        List of (position, markdown_string) tuples
-    """
-    tables_with_positions = []
-
-    for table_idx, table in enumerate(doc.tables):
-        markdown = table_to_markdown(table)
-        if markdown:
-            estimated_position = (table_idx + 1) * 100  # Placeholder
-            tables_with_positions.append((estimated_position, markdown))
-
-            logger.info(
-                f"Converted table {table_idx + 1}/{len(doc.tables)}: "
-                f"{len(table.rows)} rows, {len(table.columns)} columns"
-            )
-
-    return tables_with_positions
-
-
 def get_table_paragraph_positions(doc) -> List[int]:
     """Get the paragraph index where each table appears.
 
