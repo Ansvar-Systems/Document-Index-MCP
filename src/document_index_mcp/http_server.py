@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from .tools import (
+    MAX_FILE_SIZE,
     index_document_tool,
     search_document_tool,
     get_section_tool,
@@ -19,6 +20,8 @@ from .tools import (
     delete_document_tool,
     get_statistics_tool,
     get_surrounding_sections_tool,
+    about_tool,
+    list_supported_formats_tool,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,6 +54,9 @@ async def health():
 @app.post("/index")
 async def index_document(req: IndexRequest):
     try:
+        max_b64_size = MAX_FILE_SIZE * 4 // 3 + 4  # base64 overhead
+        if len(req.content_base64) > max_b64_size:
+            raise HTTPException(status_code=413, detail=f"File too large (max {MAX_FILE_SIZE // (1024*1024)} MB)")
         content = base64.b64decode(req.content_base64)
         suffix = Path(req.filename).suffix or ".txt"
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
@@ -58,9 +64,8 @@ async def index_document(req: IndexRequest):
             tmp_path = f.name
         try:
             result = await index_document_tool(tmp_path, DB_PATH)
-            from .database import Database
-            db = Database(DB_PATH)
-            await db.initialize()
+            from .tools import _get_db
+            db = await _get_db(DB_PATH)
             async with db.connection() as conn:
                 await conn.execute(
                     "UPDATE documents SET filename = ? WHERE doc_id = ?",
@@ -120,3 +125,13 @@ async def delete_document(doc_id: str):
 @app.get("/statistics")
 async def statistics():
     return await get_statistics_tool(DB_PATH)
+
+
+@app.get("/about")
+async def about():
+    return await about_tool()
+
+
+@app.get("/formats")
+async def formats():
+    return await list_supported_formats_tool()

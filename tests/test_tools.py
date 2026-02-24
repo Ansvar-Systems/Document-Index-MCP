@@ -9,6 +9,8 @@ from document_index_mcp.tools import (
     delete_document_tool,
     get_statistics_tool,
     get_surrounding_sections_tool,
+    about_tool,
+    list_supported_formats_tool,
 )
 
 
@@ -103,3 +105,16 @@ async def test_get_surrounding_sections(db_path, sample_doc):
     result = await get_surrounding_sections_tool(idx["doc_id"], "s2", db_path)
     assert len(result["sections"]) == 3  # s1, s2, s3
     assert result["target_ref"] == "s2"
+
+
+async def test_about():
+    result = await about_tool()
+    assert result["name"] == "Document-Index-MCP"
+    assert ".pdf" in result["supported_formats"]
+
+
+async def test_list_supported_formats():
+    result = await list_supported_formats_tool()
+    assert result["count"] > 10
+    assert ".pdf" in result["formats"]
+    assert ".docx" in result["formats"]

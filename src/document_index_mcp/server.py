@@ -15,6 +15,8 @@ from .tools import (
     delete_document_tool,
     get_statistics_tool,
     get_surrounding_sections_tool,
+    about_tool,
+    list_supported_formats_tool,
 )
 
 DB_PATH = Path(os.getenv("DOCUMENT_INDEX_DB_PATH", "data/documents.db"))
@@ -127,6 +129,16 @@ async def list_tools():
             description="Get aggregate statistics: document count, total sections, total pages.",
             inputSchema={"type": "object", "properties": {}},
         ),
+        Tool(
+            name="about",
+            description="Get information about this MCP server: version, capabilities, supported formats.",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="list_supported_formats",
+            description="List all file formats this MCP can parse and index, with descriptions.",
+            inputSchema={"type": "object", "properties": {}},
+        ),
     ]
 
 
@@ -154,6 +166,8 @@ async def call_tool(name: str, arguments: dict):
         "index_document": lambda args: index_document_tool(args["file_path"], DB_PATH),
         "delete_document": lambda args: delete_document_tool(args["doc_id"], DB_PATH),
         "get_statistics": lambda args: get_statistics_tool(DB_PATH),
+        "about": lambda args: about_tool(),
+        "list_supported_formats": lambda args: list_supported_formats_tool(),
     }
 
     handler = handlers.get(name)

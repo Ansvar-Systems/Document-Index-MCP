@@ -27,6 +27,18 @@ from .parsers import (
 
 logger = logging.getLogger(__name__)
 
+_db_cache: dict[str, Database] = {}
+
+
+async def _get_db(db_path: Path) -> Database:
+    """Return a cached Database instance, initializing on first access."""
+    key = str(db_path)
+    if key not in _db_cache:
+        db = Database(db_path)
+        await db.initialize()
+        _db_cache[key] = db
+    return _db_cache[key]
+
 MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE_MB", "50")) * 1024 * 1024
 ALLOWED_UPLOAD_DIR = os.getenv("ALLOWED_UPLOAD_DIR", "")
 
@@ -79,8 +91,7 @@ async def index_document_tool(
 
     parse_result = parser_cls().parse(fp)
 
-    db = Database(db_path)
-    await db.initialize()
+    db = await _get_db(db_path)
     doc_id = str(uuid.uuid4())
 
     async with db.connection() as conn:
@@ -134,12 +145,12 @@ async def search_document_tool(
     limit: int = 10,
 ) -> dict[str, Any]:
     """Full-text search across indexed documents with BM25 ranking."""
+    limit = min(max(limit, 1), 100)
     fts = build_fts_query(query)
     if not fts.primary:
         return {"results": [], "query": query, "_metadata": _METADATA_TEMPLATE}
 
-    db = Database(db_path)
-    await db.initialize()
+    db = await _get_db(db_path)
 
     async def _run_query(match_expr: str) -> list[dict]:
         async with db.connection() as conn:
@@ -184,8 +195,7 @@ async def get_section_tool(
     doc_id: str, section_ref: str, db_path: Path
 ) -> dict[str, Any]:
     """Retrieve a specific section by document ID and section reference."""
-    db = Database(db_path)
-    await db.initialize()
+    db = await _get_db(db_path)
 
     async with db.connection() as conn:
         cursor = await conn.execute(
@@ -206,8 +216,7 @@ async def get_document_overview_tool(
     doc_id: str, db_path: Path
 ) -> dict[str, Any]:
     """Get document metadata and section table of contents."""
-    db = Database(db_path)
-    await db.initialize()
+    db = await _get_db(db_path)
 
     async with db.connection() as conn:
         cursor = await conn.execute(
@@ -235,8 +244,9 @@ async def list_documents_tool(
     db_path: Path, limit: int = 100, offset: int = 0
 ) -> dict[str, Any]:
     """List all indexed documents."""
-    db = Database(db_path)
-    await db.initialize()
+    limit = min(max(limit, 1), 100)
+    offset = max(offset, 0)
+    db = await _get_db(db_path)
 
     async with db.connection() as conn:
         count_cursor = await conn.execute("SELECT COUNT(*) as cnt FROM documents")
@@ -262,8 +272,9 @@ async def get_surrounding_sections_tool(
     doc_id: str, section_ref: str, db_path: Path, before: int = 1, after: int = 1
 ) -> dict[str, Any]:
     """Get N sections before and after a given section for context."""
-    db = Database(db_path)
-    await db.initialize()
+    before = min(max(before, 0), 20)
+    after = min(max(after, 0), 20)
+    db = await _get_db(db_path)
 
     async with db.connection() as conn:
         cursor = await conn.execute(
@@ -294,8 +305,7 @@ async def delete_document_tool(
     doc_id: str, db_path: Path
 ) -> dict[str, Any]:
     """Delete a document and all indexed sections."""
-    db = Database(db_path)
-    await db.initialize()
+    db = await _get_db(db_path)
 
     async with db.connection() as conn:
         cursor = await conn.execute(
@@ -318,10 +328,59 @@ async def delete_document_tool(
     }
 
 
+async def about_tool() -> dict[str, Any]:
+    """Return information about this MCP server."""
+    return {
+        "name": "Document-Index-MCP",
+        "version": "0.1.0",
+        "description": (
+            "Indexes large documents (30+ pages) into SQLite with FTS5 "
+            "full-text search. Complements Document-Logic-MCP which uses "
+            "LLM extraction for smaller documents."
+        ),
+        "supported_formats": list(_PARSER_MAP.keys()),
+        "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024),
+        "capabilities": [
+            "Full-text search with BM25 ranking",
+            "Cross-page section merging",
+            "Section-level retrieval with context",
+            "PDF, DOCX, XLSX, CSV, PPTX, HTML, TXT, MD, image (OCR) support",
+        ],
+        "_metadata": _METADATA_TEMPLATE,
+    }
+
+
+async def list_supported_formats_tool() -> dict[str, Any]:
+    """List all file formats this MCP can index, with details."""
+    formats = {
+        ".pdf": "PDF documents with cross-page section merging",
+        ".docx": "Microsoft Word documents with heading detection and table extraction",
+        ".xlsx": "Excel spreadsheets (one section per sheet)",
+        ".csv": "CSV files (single section with full content)",
+        ".pptx": "PowerPoint presentations (one section per slide)",
+        ".html": "HTML pages with heading-based section splitting",
+        ".htm": "HTML pages with heading-based section splitting",
+        ".txt": "Plain text with heading detection",
+        ".md": "Markdown files with heading detection",
+        ".png": "Images via OCR (requires Tesseract)",
+        ".jpg": "Images via OCR (requires Tesseract)",
+        ".jpeg": "Images via OCR (requires Tesseract)",
+        ".tiff": "Images via OCR (requires Tesseract)",
+        ".tif": "Images via OCR (requires Tesseract)",
+        ".bmp": "Images via OCR (requires Tesseract)",
+        ".gif": "Images via OCR (requires Tesseract)",
+        ".webp": "Images via OCR (requires Tesseract)",
+    }
+    return {
+        "formats": formats,
+        "count": len(formats),
+        "_metadata": _METADATA_TEMPLATE,
+    }
+
+
 async def get_statistics_tool(db_path: Path) -> dict[str, Any]:
     """Aggregate statistics across all indexed documents."""
-    db = Database(db_path)
-    await db.initialize()
+    db = await _get_db(db_path)
 
     async with db.connection() as conn:
         cursor = await conn.execute(
