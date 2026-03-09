@@ -134,6 +134,18 @@ async def index_document_tool(
         "page_count": parse_result.page_count,
         "status": "indexed",
         "sections_preview": [s.title for s in parse_result.sections[:5]],
+        "sections": [
+            {
+                "section_ref": s.section_ref,
+                "title": s.title,
+                "content": s.content,
+                "section_index": idx,
+                "page_start": s.page_start,
+                "page_end": s.page_end,
+                "parent_ref": s.parent_ref,
+            }
+            for idx, s in enumerate(parse_result.sections)
+        ],
         "_metadata": _METADATA_TEMPLATE,
     }
 
@@ -227,7 +239,8 @@ async def get_document_overview_tool(
             raise ValueError(f"Document {doc_id} not found")
 
         cursor = await conn.execute(
-            "SELECT section_ref, title, page_start, page_end "
+            "SELECT section_ref, title, content, section_index, "
+            "page_start, page_end, parent_ref "
             "FROM sections WHERE doc_id = ? ORDER BY section_index",
             (doc_id,),
         )
