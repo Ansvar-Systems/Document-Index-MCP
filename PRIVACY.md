@@ -24,5 +24,6 @@ Document-Index-MCP processes and stores document content locally. It does not:
 ## Data Isolation
 
 - Each deployment has its own isolated SQLite database
-- No cross-tenant data sharing exists at the MCP level
-- Client data isolation is enforced at the platform level (not within this MCP)
+- HTTP and STDIO operations require tenant context (`org_id`) for document access
+- Conversation-scoped documents are further isolated by `user_id`
+- Legacy unscoped rows are migrated to a non-routable `legacy_unassigned` tenant until re-indexed

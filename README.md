@@ -30,7 +30,10 @@ Indexes uploaded documents into SQLite with FTS5 full-text search. Documents are
 
 ```bash
 docker build -t document-index-mcp .
-docker run -p 8320:3000 -v docindex-data:/app/data document-index-mcp
+docker run -p 8320:3000 \
+  -e MCP_API_KEY=change-me \
+  -v docindex-data:/app/data \
+  document-index-mcp
 ```
 
 ### Local Development
@@ -103,9 +106,14 @@ Agent (Intelligence Portal)
 | `DOCUMENT_INDEX_DB_PATH` | `data/documents.db` | SQLite database path |
 | `MAX_FILE_SIZE_MB` | `50` | Maximum file size in MB |
 | `ALLOWED_UPLOAD_DIR` | (empty = no restriction) | Restrict STDIO file paths to this directory |
+| `MCP_API_KEY` | required for HTTP unless auth disabled | Shared service key for HTTP callers |
+| `MCP_AUTH_DISABLED` | `false` | Set to `true` only for isolated local development |
 
 ## Security
 
+- **HTTP authentication:** All tenant data endpoints require `X-API-Key` unless `MCP_AUTH_DISABLED=true`
+- **Tenant isolation:** HTTP and STDIO data operations now require `org_id`; conversation-scoped documents are further filtered by `user_id`
+- **Scoped writes:** Organization-scoped create/delete operations require explicit org-write approval from the caller
 - **Path traversal protection:** STDIO `index_document` validates resolved paths against `ALLOWED_UPLOAD_DIR`
 - **SQL injection prevention:** All queries use parameterized statements; FTS5 MATCH uses safe tokenized queries (never raw user input)
 - **File size limits:** Enforced before parsing (configurable via env var)

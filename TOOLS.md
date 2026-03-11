@@ -31,7 +31,7 @@ Parse and index a document file into the SQLite FTS5 search database.
 
 **Limits:** Max file size configurable via `MAX_FILE_SIZE_MB` env var (default: 50 MB). STDIO path restricted to `ALLOWED_UPLOAD_DIR` if set.
 
-**HTTP:** `POST /index` with JSON body `{"filename": "report.pdf", "content_base64": "..."}`
+**HTTP:** `POST /index` with JSON body `{"filename": "report.pdf", "content_base64": "...", "scope": "conversation|organization"}` and headers `X-API-Key`, `X-Org-Id`, optional `X-User-Id`, and `X-Allow-Org-Write: true` for organisation-scoped writes.
 
 ---
 
@@ -65,7 +65,7 @@ Full-text search across all indexed documents with BM25 ranking and text snippet
 
 **Search behavior:** Query is tokenized (Unicode NFC normalized, single-char tokens stripped). Primary search uses AND semantics with prefix matching. If zero results and multiple tokens, falls back to OR semantics.
 
-**HTTP:** `POST /search` with JSON body `{"query": "risk assessment", "doc_id": "optional-uuid", "limit": 10}`
+**HTTP:** `POST /search` with JSON body `{"query": "risk assessment", "doc_id": "optional-uuid", "limit": 10}` plus headers `X-API-Key`, `X-Org-Id`, optional `X-User-Id`.
 
 ---
 
@@ -82,7 +82,7 @@ Retrieve the full text of a specific document section.
 
 **Returns:** Full section row including `title`, `content`, `page_start`, `page_end`, `parent_ref`, `filename`.
 
-**HTTP:** `GET /documents/{doc_id}/sections/{section_ref}`
+**HTTP:** `GET /documents/{doc_id}/sections/{section_ref}` plus headers `X-API-Key`, `X-Org-Id`, optional `X-User-Id`
 
 ---
 
@@ -98,7 +98,7 @@ Get document metadata and table of contents (all section titles and refs).
 
 **Returns:** Document metadata (`filename`, `upload_date`, `page_count`, `sections_count`, `file_type`, `file_size_bytes`) plus `sections` array with `section_ref`, `title`, `page_start`, `page_end` for each section.
 
-**HTTP:** `GET /documents/{doc_id}`
+**HTTP:** `GET /documents/{doc_id}` plus headers `X-API-Key`, `X-Org-Id`, optional `X-User-Id`
 
 ---
 
@@ -115,7 +115,7 @@ List all indexed documents with metadata.
 
 **Returns:** `documents` array, `count` (returned), `total` (in database).
 
-**HTTP:** `GET /documents?limit=100&offset=0`
+**HTTP:** `GET /documents?limit=100&offset=0` plus headers `X-API-Key`, `X-Org-Id`, optional `X-User-Id`
 
 ---
 
@@ -134,7 +134,7 @@ Get N sections before and after a given section for reading context.
 
 **Returns:** `target_ref` and `sections` array with full content for the range.
 
-**HTTP:** `GET /documents/{doc_id}/sections/{section_ref}/surrounding?before=1&after=1`
+**HTTP:** `GET /documents/{doc_id}/sections/{section_ref}/surrounding?before=1&after=1` plus headers `X-API-Key`, `X-Org-Id`, optional `X-User-Id`
 
 ---
 
@@ -150,7 +150,7 @@ Delete a document and all its indexed sections (cascades to FTS5).
 
 **Returns:** `deleted` (doc_id), `filename`, `status: "deleted"`.
 
-**HTTP:** `DELETE /documents/{doc_id}`
+**HTTP:** `DELETE /documents/{doc_id}` plus headers `X-API-Key`, `X-Org-Id`, optional `X-User-Id`; deleting organisation-scoped docs also requires `X-Allow-Org-Write: true`
 
 ---
 
@@ -162,7 +162,7 @@ Aggregate statistics across all indexed documents.
 
 **Returns:** `doc_count`, `total_sections`, `total_pages`.
 
-**HTTP:** `GET /statistics`
+**HTTP:** `GET /statistics` plus headers `X-API-Key`, `X-Org-Id`, optional `X-User-Id`
 
 ---
 

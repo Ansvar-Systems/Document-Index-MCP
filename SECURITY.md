@@ -20,8 +20,11 @@ Do not open a public issue for security vulnerabilities.
 - No network egress required (all processing is local)
 - SQLite WAL journal mode for data integrity
 - Foreign key constraints with ON DELETE CASCADE
+- HTTP endpoints require `X-API-Key` unless `MCP_AUTH_DISABLED=true`
+- HTTP and STDIO document operations are tenant-scoped by `org_id`
+- Conversation-scoped documents require matching `user_id`; organisation-wide writes require explicit caller approval
 
 ### Dependencies
 - Minimal dependency set (pdfplumber, python-docx, openpyxl, python-pptx, beautifulsoup4, pytesseract, Pillow)
 - No credential storage within the MCP
-- No authentication at the MCP level (handled by platform)
+- HTTP authentication is enforced at the MCP level; platform callers must still supply the correct tenant/user context

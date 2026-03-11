@@ -37,11 +37,13 @@ async def list_tools():
             inputSchema={
                 "type": "object",
                 "properties": {
+                    "org_id": {"type": "string", "description": "Tenant/organisation identifier"},
+                    "user_id": {"type": "string", "description": "Optional user identifier for conversation-scoped docs"},
                     "query": {"type": "string", "description": "Search query text"},
                     "doc_id": {"type": "string", "description": "Optional: scope to one document"},
                     "limit": {"type": "integer", "default": 10},
                 },
-                "required": ["query"],
+                "required": ["org_id", "query"],
             },
         ),
         Tool(
@@ -54,10 +56,12 @@ async def list_tools():
             inputSchema={
                 "type": "object",
                 "properties": {
+                    "org_id": {"type": "string"},
+                    "user_id": {"type": "string", "description": "Optional user identifier for conversation-scoped docs"},
                     "doc_id": {"type": "string"},
                     "section_ref": {"type": "string"},
                 },
-                "required": ["doc_id", "section_ref"],
+                "required": ["org_id", "doc_id", "section_ref"],
             },
         ),
         Tool(
@@ -68,8 +72,12 @@ async def list_tools():
             ),
             inputSchema={
                 "type": "object",
-                "properties": {"doc_id": {"type": "string"}},
-                "required": ["doc_id"],
+                "properties": {
+                    "org_id": {"type": "string"},
+                    "user_id": {"type": "string", "description": "Optional user identifier for conversation-scoped docs"},
+                    "doc_id": {"type": "string"},
+                },
+                "required": ["org_id", "doc_id"],
             },
         ),
         Tool(
@@ -78,9 +86,12 @@ async def list_tools():
             inputSchema={
                 "type": "object",
                 "properties": {
+                    "org_id": {"type": "string"},
+                    "user_id": {"type": "string", "description": "Optional user identifier for conversation-scoped docs"},
                     "limit": {"type": "integer", "default": 100},
                     "offset": {"type": "integer", "default": 0},
                 },
+                "required": ["org_id"],
             },
         ),
         Tool(
@@ -92,12 +103,14 @@ async def list_tools():
             inputSchema={
                 "type": "object",
                 "properties": {
+                    "org_id": {"type": "string"},
+                    "user_id": {"type": "string", "description": "Optional user identifier for conversation-scoped docs"},
                     "doc_id": {"type": "string"},
                     "section_ref": {"type": "string"},
                     "before": {"type": "integer", "default": 1},
                     "after": {"type": "integer", "default": 1},
                 },
-                "required": ["doc_id", "section_ref"],
+                "required": ["org_id", "doc_id", "section_ref"],
             },
         ),
         Tool(
@@ -111,8 +124,24 @@ async def list_tools():
                 "type": "object",
                 "properties": {
                     "file_path": {"type": "string", "description": "Absolute path to file"},
+                    "org_id": {"type": "string", "description": "Tenant/organisation identifier"},
+                    "scope": {
+                        "type": "string",
+                        "enum": ["conversation", "organization"],
+                        "default": "conversation",
+                    },
+                    "owner_user_id": {
+                        "type": "string",
+                        "description": "Required for conversation-scoped documents",
+                    },
+                    "title": {"type": "string", "description": "Optional human-readable title"},
+                    "allow_org_write": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Required when creating organization-scoped documents",
+                    },
                 },
-                "required": ["file_path"],
+                "required": ["file_path", "org_id"],
             },
         ),
         Tool(
@@ -120,14 +149,30 @@ async def list_tools():
             description="Delete a document and all its indexed sections.",
             inputSchema={
                 "type": "object",
-                "properties": {"doc_id": {"type": "string"}},
-                "required": ["doc_id"],
+                "properties": {
+                    "org_id": {"type": "string"},
+                    "user_id": {"type": "string", "description": "Optional user identifier for conversation-scoped docs"},
+                    "doc_id": {"type": "string"},
+                    "allow_org_write": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Required to delete organization-scoped documents",
+                    },
+                },
+                "required": ["org_id", "doc_id"],
             },
         ),
         Tool(
             name="get_statistics",
             description="Get aggregate statistics: document count, total sections, total pages.",
-            inputSchema={"type": "object", "properties": {}},
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "org_id": {"type": "string"},
+                    "user_id": {"type": "string", "description": "Optional user identifier for conversation-scoped docs"},
+                },
+                "required": ["org_id"],
+            },
         ),
         Tool(
             name="about",
@@ -148,24 +193,61 @@ async def call_tool(name: str, arguments: dict):
 
     handlers = {
         "search_document": lambda args: search_document_tool(
-            args["query"], DB_PATH, doc_id=args.get("doc_id"), limit=args.get("limit", 10)
+            args["query"],
+            DB_PATH,
+            org_id=args["org_id"],
+            user_id=args.get("user_id"),
+            doc_id=args.get("doc_id"),
+            limit=args.get("limit", 10),
         ),
         "get_section": lambda args: get_section_tool(
-            args["doc_id"], args["section_ref"], DB_PATH
+            args["doc_id"],
+            args["section_ref"],
+            DB_PATH,
+            org_id=args["org_id"],
+            user_id=args.get("user_id"),
         ),
         "get_document_overview": lambda args: get_document_overview_tool(
-            args["doc_id"], DB_PATH
+            args["doc_id"],
+            DB_PATH,
+            org_id=args["org_id"],
+            user_id=args.get("user_id"),
         ),
         "list_documents": lambda args: list_documents_tool(
-            DB_PATH, limit=args.get("limit", 100), offset=args.get("offset", 0)
+            DB_PATH,
+            org_id=args["org_id"],
+            user_id=args.get("user_id"),
+            limit=args.get("limit", 100),
+            offset=args.get("offset", 0),
         ),
         "get_surrounding_sections": lambda args: get_surrounding_sections_tool(
             args["doc_id"], args["section_ref"], DB_PATH,
-            before=args.get("before", 1), after=args.get("after", 1)
+            org_id=args["org_id"],
+            user_id=args.get("user_id"),
+            before=args.get("before", 1),
+            after=args.get("after", 1),
         ),
-        "index_document": lambda args: index_document_tool(args["file_path"], DB_PATH),
-        "delete_document": lambda args: delete_document_tool(args["doc_id"], DB_PATH),
-        "get_statistics": lambda args: get_statistics_tool(DB_PATH),
+        "index_document": lambda args: index_document_tool(
+            args["file_path"],
+            DB_PATH,
+            org_id=args["org_id"],
+            scope=args.get("scope", "conversation"),
+            owner_user_id=args.get("owner_user_id"),
+            title=args.get("title"),
+            allow_org_write=args.get("allow_org_write", False),
+        ),
+        "delete_document": lambda args: delete_document_tool(
+            args["doc_id"],
+            DB_PATH,
+            org_id=args["org_id"],
+            user_id=args.get("user_id"),
+            allow_org_write=args.get("allow_org_write", False),
+        ),
+        "get_statistics": lambda args: get_statistics_tool(
+            DB_PATH,
+            org_id=args["org_id"],
+            user_id=args.get("user_id"),
+        ),
         "about": lambda args: about_tool(),
         "list_supported_formats": lambda args: list_supported_formats_tool(),
     }
@@ -177,7 +259,7 @@ async def call_tool(name: str, arguments: dict):
     try:
         result = await handler(arguments)
         return [TextContent(type="text", text=json.dumps(result, indent=2, default=str))]
-    except (ValueError, FileNotFoundError) as e:
+    except (PermissionError, ValueError, FileNotFoundError) as e:
         return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
 
 

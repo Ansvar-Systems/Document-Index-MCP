@@ -12,14 +12,17 @@ async def test_initialize_creates_tables(db_path):
     db = Database(db_path)
     await db.initialize()
     async with db.connection() as conn:
-        cursor = await conn.execute(
+        table_cursor = await conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
         )
-        tables = [row[0] for row in await cursor.fetchall()]
+        tables = [row[0] for row in await table_cursor.fetchall()]
+        column_cursor = await conn.execute("PRAGMA table_info(documents)")
+        columns = {row[1] for row in await column_cursor.fetchall()}
     assert "documents" in tables
     assert "sections" in tables
     assert "sections_fts" in tables
     assert "db_metadata" in tables
+    assert {"org_id", "owner_user_id", "scope"} <= columns
 
 
 async def test_fts5_trigger_indexes_on_insert(db_path):
@@ -27,8 +30,8 @@ async def test_fts5_trigger_indexes_on_insert(db_path):
     await db.initialize()
     async with db.connection() as conn:
         await conn.execute(
-            "INSERT INTO documents (doc_id, filename, upload_date, sections_count) "
-            "VALUES ('d1', 'test.pdf', '2026-01-01', 1)"
+            "INSERT INTO documents (doc_id, org_id, scope, filename, upload_date, sections_count) "
+            "VALUES ('d1', 'org-1', 'organization', 'test.pdf', '2026-01-01', 1)"
         )
         await conn.execute(
             "INSERT INTO sections (doc_id, section_ref, title, content, section_index) "

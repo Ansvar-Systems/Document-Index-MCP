@@ -5,14 +5,20 @@ Sections are indexed like legal provisions — one row per structural section,
 full-text searchable via FTS5 with BM25 ranking.
 """
 
-import aiosqlite
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator, Union
 
+import aiosqlite
+
+LEGACY_UNASSIGNED_ORG = "legacy_unassigned"
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
     doc_id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL DEFAULT 'legacy_unassigned',
+    owner_user_id TEXT,
+    scope TEXT NOT NULL DEFAULT 'organization',
     filename TEXT NOT NULL,
     title TEXT,
     upload_date TEXT NOT NULL,
@@ -84,7 +90,41 @@ class Database:
             await db.execute("PRAGMA journal_mode = WAL")
             await db.execute("PRAGMA foreign_keys = ON")
             await db.executescript(SCHEMA)
+            await self._migrate_documents_table(db)
             await db.commit()
+
+    async def _migrate_documents_table(self, db: aiosqlite.Connection) -> None:
+        columns_cursor = await db.execute("PRAGMA table_info(documents)")
+        columns = {row[1] for row in await columns_cursor.fetchall()}
+
+        if "org_id" not in columns:
+            await db.execute(
+                f"ALTER TABLE documents ADD COLUMN org_id TEXT NOT NULL DEFAULT '{LEGACY_UNASSIGNED_ORG}'"
+            )
+        if "owner_user_id" not in columns:
+            await db.execute("ALTER TABLE documents ADD COLUMN owner_user_id TEXT")
+        if "scope" not in columns:
+            await db.execute(
+                "ALTER TABLE documents ADD COLUMN scope TEXT NOT NULL DEFAULT 'organization'"
+            )
+
+        await db.execute(
+            "UPDATE documents SET org_id = ? WHERE org_id IS NULL OR TRIM(org_id) = ''",
+            (LEGACY_UNASSIGNED_ORG,),
+        )
+        await db.execute(
+            "UPDATE documents SET scope = 'organization' WHERE scope IS NULL OR TRIM(scope) = ''"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_documents_org_id ON documents(org_id)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_documents_org_scope ON documents(org_id, scope)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_documents_org_owner_scope "
+            "ON documents(org_id, owner_user_id, scope)"
+        )
 
     @asynccontextmanager
     async def connection(self) -> AsyncIterator[aiosqlite.Connection]:
