@@ -36,6 +36,15 @@ class IndexRequest(BaseModel):
     content_base64: str
 
 
+class IndexFileRequest(BaseModel):
+    object_key: str
+    filename: str
+    title: str | None = None
+
+
+SHARED_FILES_PATH = Path(os.getenv("SHARED_FILES_PATH", "/data/uploads"))
+
+
 class SearchRequest(BaseModel):
     query: str
     doc_id: Optional[str] = None
@@ -76,6 +85,31 @@ async def index_document(req: IndexRequest):
             return result
         finally:
             Path(tmp_path).unlink(missing_ok=True)
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/index-file")
+async def index_file(req: IndexFileRequest):
+    """Index a document from the shared filesystem by object_key."""
+    resolved = (SHARED_FILES_PATH / req.object_key).resolve()
+    if not resolved.is_relative_to(SHARED_FILES_PATH.resolve()):
+        raise HTTPException(status_code=403, detail="Path traversal not allowed")
+    if not resolved.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {req.object_key}")
+
+    try:
+        result = await index_document_tool(str(resolved), DB_PATH)
+        from .tools import _get_db
+        db = await _get_db(DB_PATH)
+        async with db.connection() as conn:
+            await conn.execute(
+                "UPDATE documents SET filename = ? WHERE doc_id = ?",
+                (req.filename, result["doc_id"]),
+            )
+            await conn.commit()
+        result["filename"] = req.filename
+        return result
     except (ValueError, FileNotFoundError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
