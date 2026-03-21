@@ -7,7 +7,8 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Security
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
 from .tools import (
@@ -26,7 +27,26 @@ from .tools import (
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Document-Index-MCP", version="0.1.0")
+# --- Authentication ---
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+async def verify_api_key(api_key: Optional[str] = Security(_api_key_header)):
+    """Verify API key if MCP_API_KEY is configured. Skip auth if unset (dev mode)."""
+    required_key = os.getenv("MCP_API_KEY")
+    if not required_key:
+        return  # No key configured — allow (dev mode)
+    if api_key != required_key:
+        raise HTTPException(status_code=403, detail="Invalid or missing API key")
+    return api_key
+
+
+# Initialize FastAPI app — all endpoints require API key when MCP_API_KEY is set
+app = FastAPI(
+    title="Document-Index-MCP",
+    version="0.1.0",
+    dependencies=[Depends(verify_api_key)],
+)
 
 DB_PATH = Path(os.getenv("DOCUMENT_INDEX_DB_PATH", "/app/data/documents.db"))
 
@@ -36,19 +56,37 @@ class IndexRequest(BaseModel):
     content_base64: str
 
 
+class IndexFileRequest(BaseModel):
+    object_key: str
+    filename: str
+    title: str | None = None
+
+
+SHARED_FILES_PATH = Path(os.getenv("SHARED_FILES_PATH", "/data/uploads"))
+
+
 class SearchRequest(BaseModel):
     query: str
     doc_id: Optional[str] = None
     limit: int = 10
 
 
-@app.get("/health")
+# --- Unauthenticated health check (override removes app-level auth dependency) ---
+from fastapi import APIRouter as _APIRouter
+
+_health_router = _APIRouter(dependencies=[])
+
+
+@_health_router.get("/health")
 async def health():
     return {
         "status": "healthy",
         "server": "Document-Index-MCP",
         "version": "0.1.0",
     }
+
+
+app.include_router(_health_router)
 
 
 @app.post("/index")
@@ -76,6 +114,31 @@ async def index_document(req: IndexRequest):
             return result
         finally:
             Path(tmp_path).unlink(missing_ok=True)
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/index-file")
+async def index_file(req: IndexFileRequest):
+    """Index a document from the shared filesystem by object_key."""
+    resolved = (SHARED_FILES_PATH / req.object_key).resolve()
+    if not resolved.is_relative_to(SHARED_FILES_PATH.resolve()):
+        raise HTTPException(status_code=403, detail="Path traversal not allowed")
+    if not resolved.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {req.object_key}")
+
+    try:
+        result = await index_document_tool(str(resolved), DB_PATH)
+        from .tools import _get_db
+        db = await _get_db(DB_PATH)
+        async with db.connection() as conn:
+            await conn.execute(
+                "UPDATE documents SET filename = ? WHERE doc_id = ?",
+                (req.filename, result["doc_id"]),
+            )
+            await conn.commit()
+        result["filename"] = req.filename
+        return result
     except (ValueError, FileNotFoundError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
