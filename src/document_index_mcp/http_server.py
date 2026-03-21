@@ -7,7 +7,8 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Security
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
 from .tools import (
@@ -26,7 +27,26 @@ from .tools import (
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Document-Index-MCP", version="0.1.0")
+# --- Authentication ---
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+async def verify_api_key(api_key: Optional[str] = Security(_api_key_header)):
+    """Verify API key if MCP_API_KEY is configured. Skip auth if unset (dev mode)."""
+    required_key = os.getenv("MCP_API_KEY")
+    if not required_key:
+        return  # No key configured — allow (dev mode)
+    if api_key != required_key:
+        raise HTTPException(status_code=403, detail="Invalid or missing API key")
+    return api_key
+
+
+# Initialize FastAPI app — all endpoints require API key when MCP_API_KEY is set
+app = FastAPI(
+    title="Document-Index-MCP",
+    version="0.1.0",
+    dependencies=[Depends(verify_api_key)],
+)
 
 DB_PATH = Path(os.getenv("DOCUMENT_INDEX_DB_PATH", "/app/data/documents.db"))
 
@@ -51,13 +71,22 @@ class SearchRequest(BaseModel):
     limit: int = 10
 
 
-@app.get("/health")
+# --- Unauthenticated health check (override removes app-level auth dependency) ---
+from fastapi import APIRouter as _APIRouter
+
+_health_router = _APIRouter(dependencies=[])
+
+
+@_health_router.get("/health")
 async def health():
     return {
         "status": "healthy",
         "server": "Document-Index-MCP",
         "version": "0.1.0",
     }
+
+
+app.include_router(_health_router)
 
 
 @app.post("/index")
