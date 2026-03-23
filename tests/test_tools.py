@@ -43,6 +43,34 @@ async def test_index_document(db_path, sample_doc):
     assert "doc_id" in result
 
 
+async def test_index_document_disambiguates_duplicate_section_refs(db_path, tmp_path):
+    doc = tmp_path / "duplicate-headings.txt"
+    doc.write_text(
+        "1. Scope\n"
+        "Original scope content.\n"
+        "\n"
+        "1.1 Detail\n"
+        "Original detail content.\n"
+        "\n"
+        "1. Scope\n"
+        "Repeated scope content.\n"
+        "\n"
+        "1.1 Detail\n"
+        "Repeated detail content.\n"
+    )
+
+    idx = await index_document_tool(str(doc), db_path)
+    overview = await get_document_overview_tool(idx["doc_id"], db_path)
+
+    assert [section["section_ref"] for section in overview["sections"]] == [
+        "s1",
+        "s1.1",
+        "s1--2",
+        "s1.1--2",
+    ]
+    assert overview["sections"][3]["parent_ref"] == "s1--2"
+
+
 async def test_search_document(db_path, sample_doc):
     await index_document_tool(str(sample_doc), db_path)
     result = await search_document_tool("authentication", db_path)

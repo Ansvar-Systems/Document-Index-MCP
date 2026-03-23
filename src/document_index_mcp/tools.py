@@ -69,6 +69,49 @@ _METADATA_TEMPLATE = {
 }
 
 
+def _disambiguate_section_ref(section_ref: str, occurrence: int) -> str:
+    """Return a stable, unique section_ref for duplicate headings."""
+    if occurrence <= 1:
+        return section_ref
+    return f"{section_ref}--{occurrence}"
+
+
+def _ensure_unique_section_refs(sections: list[Any]) -> None:
+    """Make section refs unique within a parsed document.
+
+    Some source documents repeat numbered headings such as "1. Scope" more
+    than once. SQLite enforces uniqueness for (doc_id, section_ref), so later
+    duplicates need a deterministic suffix before insert.
+    """
+    ref_counts: dict[str, int] = {}
+    latest_ref_by_base: dict[str, str] = {}
+
+    for idx, section in enumerate(sections):
+        base_ref = (section.section_ref or "").strip() or f"section-{idx + 1}"
+        base_parent_ref = (section.parent_ref or "").strip() or None
+
+        occurrence = ref_counts.get(base_ref, 0) + 1
+        ref_counts[base_ref] = occurrence
+
+        unique_ref = _disambiguate_section_ref(base_ref, occurrence)
+        section.section_ref = unique_ref
+        section.parent_ref = (
+            latest_ref_by_base.get(base_parent_ref, base_parent_ref)
+            if base_parent_ref
+            else None
+        )
+
+        latest_ref_by_base[base_ref] = unique_ref
+        latest_ref_by_base[unique_ref] = unique_ref
+
+        if occurrence > 1:
+            logger.warning(
+                "Duplicate section_ref %s detected; renamed to %s",
+                base_ref,
+                unique_ref,
+            )
+
+
 async def index_document_tool(
     file_path: str, db_path: Path
 ) -> dict[str, Any]:
@@ -90,6 +133,7 @@ async def index_document_tool(
         raise ValueError(f"Unsupported file type: {fp.suffix}")
 
     parse_result = parser_cls().parse(fp)
+    _ensure_unique_section_refs(parse_result.sections)
 
     db = await _get_db(db_path)
     doc_id = str(uuid.uuid4())
