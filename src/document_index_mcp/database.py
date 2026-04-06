@@ -5,6 +5,8 @@ Sections are indexed like legal provisions — one row per structural section,
 full-text searchable via FTS5 with BM25 ranking.
 """
 
+import sqlite3
+
 import aiosqlite
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -151,7 +153,7 @@ class Database:
                     continue
                 try:
                     await db.execute(stmt)
-                except Exception:
+                except (sqlite3.OperationalError, aiosqlite.OperationalError):
                     pass  # Column already exists — safe to skip
 
             # Create indexes that may not exist

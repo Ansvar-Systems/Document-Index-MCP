@@ -321,6 +321,14 @@ async def search_company_policies_tool(
     context, and parent policy metadata.
     """
     limit = min(max(limit, 1), 100)
+
+    if doc_type and doc_type not in VALID_DOC_TYPES:
+        raise ValueError(f"Invalid doc_type filter: {doc_type}")
+    if classification and classification not in VALID_CLASSIFICATIONS:
+        raise ValueError(f"Invalid classification filter: {classification}")
+    if status and status not in VALID_STATUSES:
+        raise ValueError(f"Invalid status filter: {status}")
+
     fts = build_fts_query(query)
     if not fts.primary:
         return {"results": [], "query": query, "total": 0, "_metadata": _METADATA_TEMPLATE}
@@ -376,16 +384,19 @@ async def search_company_policies_tool(
             cursor = await conn.execute(sql, params)
             rows = [dict(r) for r in await cursor.fetchall()]
 
-            # Total count
-            count_sql = f"""
-                SELECT COUNT(*) AS cnt
-                FROM sections_fts
-                JOIN sections s ON s.id = sections_fts.rowid
-                JOIN documents d ON d.doc_id = s.doc_id
-                WHERE {where}
-            """
-            count_cursor = await conn.execute(count_sql, params[:-1])
-            total = (await count_cursor.fetchone())["cnt"]
+            # Skip COUNT query when we already have all results
+            if len(rows) < limit:
+                total = len(rows)
+            else:
+                count_sql = f"""
+                    SELECT COUNT(*) AS cnt
+                    FROM sections_fts
+                    JOIN sections s ON s.id = sections_fts.rowid
+                    JOIN documents d ON d.doc_id = s.doc_id
+                    WHERE {where}
+                """
+                count_cursor = await conn.execute(count_sql, params[:-1])
+                total = (await count_cursor.fetchone())["cnt"]
 
             return rows, total
 
