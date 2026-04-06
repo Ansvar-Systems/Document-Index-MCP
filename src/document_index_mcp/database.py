@@ -20,7 +20,28 @@ CREATE TABLE IF NOT EXISTS documents (
     sections_count INTEGER,
     file_type TEXT,
     file_size_bytes INTEGER,
-    metadata TEXT
+    metadata TEXT,
+
+    -- GRC policy library fields (v2)
+    scope TEXT DEFAULT 'general' CHECK (scope IN ('general', 'policy_library')),
+    doc_type TEXT CHECK (doc_type IN (
+        'policy', 'procedure', 'guideline', 'standard',
+        'control_matrix', 'risk_register', 'asset_inventory',
+        'soa', 'evidence', 'report', 'other'
+    )),
+    classification TEXT DEFAULT 'internal' CHECK (classification IN (
+        'public', 'internal', 'confidential', 'restricted'
+    )),
+    status TEXT DEFAULT 'active' CHECK (status IN (
+        'draft', 'active', 'under_review', 'superseded', 'retired'
+    )),
+    framework_refs TEXT,    -- JSON array: ["ISO 27001:A.8", "DORA:Art.9"]
+    owner TEXT,
+    version TEXT,
+    review_date TEXT,
+    effective_date TEXT,
+    source_ref TEXT,        -- connector dedup key
+    last_synced TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sections (
@@ -33,11 +54,18 @@ CREATE TABLE IF NOT EXISTS sections (
     page_start INTEGER,
     page_end INTEGER,
     parent_ref TEXT,
+
+    -- GRC fields (v2)
+    control_refs TEXT,      -- JSON array: ["A.8.1", "A.5.15"]
+    framework_refs TEXT,    -- JSON array (section-level)
+
     UNIQUE(doc_id, section_ref)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sections_doc_id ON sections(doc_id);
 CREATE INDEX IF NOT EXISTS idx_sections_ref ON sections(doc_id, section_ref);
+CREATE INDEX IF NOT EXISTS idx_documents_scope ON documents(scope);
+CREATE INDEX IF NOT EXISTS idx_documents_doc_type ON documents(doc_type);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS sections_fts USING fts5(
     title,
@@ -70,6 +98,26 @@ CREATE TABLE IF NOT EXISTS db_metadata (
 );
 """
 
+# Migrations for existing databases — safe to run multiple times
+MIGRATIONS_V2 = """
+-- Documents: GRC columns
+ALTER TABLE documents ADD COLUMN scope TEXT DEFAULT 'general';
+ALTER TABLE documents ADD COLUMN doc_type TEXT;
+ALTER TABLE documents ADD COLUMN classification TEXT DEFAULT 'internal';
+ALTER TABLE documents ADD COLUMN status TEXT DEFAULT 'active';
+ALTER TABLE documents ADD COLUMN framework_refs TEXT;
+ALTER TABLE documents ADD COLUMN owner TEXT;
+ALTER TABLE documents ADD COLUMN version TEXT;
+ALTER TABLE documents ADD COLUMN review_date TEXT;
+ALTER TABLE documents ADD COLUMN effective_date TEXT;
+ALTER TABLE documents ADD COLUMN source_ref TEXT;
+ALTER TABLE documents ADD COLUMN last_synced TEXT;
+
+-- Sections: GRC columns
+ALTER TABLE sections ADD COLUMN control_refs TEXT;
+ALTER TABLE sections ADD COLUMN framework_refs TEXT;
+"""
+
 
 class Database:
     """SQLite database with FTS5 indexing for document sections."""
@@ -84,7 +132,39 @@ class Database:
             await db.execute("PRAGMA journal_mode = WAL")
             await db.execute("PRAGMA foreign_keys = ON")
             await db.executescript(SCHEMA)
+            await self._run_migrations(db)
             await db.commit()
+
+    async def _run_migrations(self, db: aiosqlite.Connection) -> None:
+        """Apply schema migrations for existing databases. Safe to re-run."""
+        # Check current schema version
+        cursor = await db.execute(
+            "SELECT value FROM db_metadata WHERE key = 'schema_version'"
+        )
+        row = await cursor.fetchone()
+        current_version = int(row[0]) if row else 1
+
+        if current_version < 2:
+            for stmt in MIGRATIONS_V2.strip().split(";"):
+                stmt = stmt.strip()
+                if not stmt or stmt.startswith("--"):
+                    continue
+                try:
+                    await db.execute(stmt)
+                except Exception:
+                    pass  # Column already exists — safe to skip
+
+            # Create indexes that may not exist
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_documents_scope ON documents(scope)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_documents_doc_type ON documents(doc_type)"
+            )
+
+            await db.execute(
+                "INSERT OR REPLACE INTO db_metadata (key, value) VALUES ('schema_version', '2')"
+            )
 
     @asynccontextmanager
     async def connection(self) -> AsyncIterator[aiosqlite.Connection]:
