@@ -405,3 +405,65 @@ async def get_statistics_tool(db_path: Path) -> dict[str, Any]:
         stats = dict(await cursor.fetchone())
 
     return {**stats, "_metadata": _METADATA_TEMPLATE}
+
+
+async def list_sources_tool() -> dict[str, Any]:
+    """Describe data provenance: user-uploaded documents indexed locally."""
+    return {
+        "sources": [
+            {
+                "id": "user-uploads",
+                "name": "User-uploaded documents",
+                "description": (
+                    "All documents are uploaded directly by users via the /index "
+                    "or /index-file endpoints. There is no external data feed."
+                ),
+                "provenance": "user-provided",
+                "update_mechanism": "manual upload",
+                "scheduled_refresh": False,
+            }
+        ],
+        "parser_library_mapping": {
+            ".pdf": "pdfplumber",
+            ".docx": "python-docx",
+            ".xlsx": "openpyxl",
+            ".csv": "built-in csv",
+            ".pptx": "python-pptx",
+            ".html": "beautifulsoup4",
+            ".htm": "beautifulsoup4",
+            ".txt": "built-in",
+            ".md": "built-in",
+            ".png": "pytesseract + Pillow",
+            ".jpg": "pytesseract + Pillow",
+            ".jpeg": "pytesseract + Pillow",
+            ".tiff": "pytesseract + Pillow",
+            ".tif": "pytesseract + Pillow",
+            ".bmp": "pytesseract + Pillow",
+            ".gif": "pytesseract + Pillow",
+            ".webp": "pytesseract + Pillow",
+        },
+        "_metadata": _METADATA_TEMPLATE,
+    }
+
+
+async def check_data_freshness_tool(db_path: Path) -> dict[str, Any]:
+    """Report the most recent upload date and note no scheduled refresh applies."""
+    db = await _get_db(db_path)
+
+    async with db.connection() as conn:
+        cursor = await conn.execute(
+            "SELECT MAX(upload_date) as latest_upload, COUNT(*) as doc_count "
+            "FROM documents"
+        )
+        row = dict(await cursor.fetchone())
+
+    return {
+        "latest_upload": row["latest_upload"],
+        "doc_count": row["doc_count"],
+        "scheduled_refresh": False,
+        "note": (
+            "Documents are user-uploaded on demand. No automated refresh pipeline "
+            "exists — data freshness depends entirely on manual uploads."
+        ),
+        "_metadata": _METADATA_TEMPLATE,
+    }
