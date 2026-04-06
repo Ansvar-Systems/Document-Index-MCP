@@ -11,6 +11,7 @@ Tools:
 - get_statistics_tool: Aggregate stats (section count, word count)
 """
 
+import json
 import logging
 import os
 import uuid
@@ -24,6 +25,14 @@ from .parsers import (
     PDFParser, TextParser, DOCXParser, XLSXParser,
     CSVParser, PPTXParser, HTMLParser, ImageParser,
 )
+
+VALID_DOC_TYPES = {
+    'policy', 'procedure', 'guideline', 'standard',
+    'control_matrix', 'risk_register', 'asset_inventory',
+    'soa', 'evidence', 'report', 'other',
+}
+VALID_CLASSIFICATIONS = {'public', 'internal', 'confidential', 'restricted'}
+VALID_STATUSES = {'draft', 'active', 'under_review', 'superseded', 'retired'}
 
 logger = logging.getLogger(__name__)
 
@@ -113,9 +122,29 @@ def _ensure_unique_section_refs(sections: list[Any]) -> None:
 
 
 async def index_document_tool(
-    file_path: str, db_path: Path
+    file_path: str,
+    db_path: Path,
+    *,
+    scope: str = "general",
+    doc_type: Optional[str] = None,
+    classification: str = "internal",
+    status: str = "active",
+    framework_refs: Optional[list[str]] = None,
+    owner: Optional[str] = None,
+    version: Optional[str] = None,
+    review_date: Optional[str] = None,
+    effective_date: Optional[str] = None,
+    source_ref: Optional[str] = None,
+    section_control_refs: Optional[dict[str, list[str]]] = None,
+    section_framework_refs: Optional[dict[str, list[str]]] = None,
 ) -> dict[str, Any]:
-    """Parse and index a document into SQLite with FTS5."""
+    """Parse and index a document into SQLite with FTS5.
+
+    GRC metadata (doc_type, framework_refs, etc.) is optional.
+    Documents with scope='policy_library' are searchable via
+    search_company_policies. section_control_refs maps section_ref
+    to control identifiers (e.g. {"s4.1": ["A.8.24"]}).
+    """
     fp = Path(file_path).resolve()
     if ALLOWED_UPLOAD_DIR:
         allowed = Path(ALLOWED_UPLOAD_DIR).resolve()
@@ -128,6 +157,13 @@ async def index_document_tool(
     if fp.stat().st_size > MAX_FILE_SIZE:
         raise ValueError(f"File too large (max {MAX_FILE_SIZE // (1024*1024)} MB)")
 
+    if doc_type and doc_type not in VALID_DOC_TYPES:
+        raise ValueError(f"Invalid doc_type: {doc_type}")
+    if classification not in VALID_CLASSIFICATIONS:
+        raise ValueError(f"Invalid classification: {classification}")
+    if status not in VALID_STATUSES:
+        raise ValueError(f"Invalid status: {status}")
+
     parser_cls = _PARSER_MAP.get(fp.suffix.lower())
     if parser_cls is None:
         raise ValueError(f"Unsupported file type: {fp.suffix}")
@@ -137,12 +173,15 @@ async def index_document_tool(
 
     db = await _get_db(db_path)
     doc_id = str(uuid.uuid4())
+    fw_json = json.dumps(framework_refs) if framework_refs else None
 
     async with db.connection() as conn:
         await conn.execute(
             "INSERT INTO documents (doc_id, filename, upload_date, page_count, "
-            "sections_count, file_type, file_size_bytes) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "sections_count, file_type, file_size_bytes, "
+            "scope, doc_type, classification, status, framework_refs, "
+            "owner, version, review_date, effective_date, source_ref, last_synced) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 doc_id,
                 parse_result.filename,
@@ -151,13 +190,28 @@ async def index_document_tool(
                 len(parse_result.sections),
                 fp.suffix.lower(),
                 fp.stat().st_size,
+                scope,
+                doc_type,
+                classification,
+                status,
+                fw_json,
+                owner,
+                version,
+                review_date,
+                effective_date,
+                source_ref,
+                datetime.now().isoformat() if source_ref else None,
             ),
         )
         for idx, section in enumerate(parse_result.sections):
+            s_ref = section.section_ref
+            s_ctrl = json.dumps(section_control_refs.get(s_ref, [])) if section_control_refs and s_ref in section_control_refs else None
+            s_fw = json.dumps(section_framework_refs.get(s_ref, [])) if section_framework_refs and s_ref in section_framework_refs else None
             await conn.execute(
                 "INSERT INTO sections (doc_id, section_ref, title, content, "
-                "section_index, page_start, page_end, parent_ref) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "section_index, page_start, page_end, parent_ref, "
+                "control_refs, framework_refs) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     doc_id,
                     section.section_ref,
@@ -167,6 +221,8 @@ async def index_document_tool(
                     section.page_start,
                     section.page_end,
                     section.parent_ref,
+                    s_ctrl,
+                    s_fw,
                 ),
             )
         await conn.commit()
@@ -176,6 +232,8 @@ async def index_document_tool(
         "filename": parse_result.filename,
         "sections_count": len(parse_result.sections),
         "page_count": parse_result.page_count,
+        "scope": scope,
+        "doc_type": doc_type,
         "status": "indexed",
         "sections_preview": [s.title for s in parse_result.sections[:5]],
         "sections": [
@@ -243,6 +301,214 @@ async def search_document_tool(
         "results": results,
         "query": query,
         "match_count": len(results),
+        "_metadata": _METADATA_TEMPLATE,
+    }
+
+
+async def search_company_policies_tool(
+    query: str,
+    db_path: Path,
+    doc_type: Optional[str] = None,
+    framework: Optional[str] = None,
+    classification: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 20,
+) -> dict[str, Any]:
+    """Search the client's authoritative policy library.
+
+    Scoped to documents with scope='policy_library' — never returns ad-hoc
+    uploads. Returns section-level results with control references, framework
+    context, and parent policy metadata.
+    """
+    limit = min(max(limit, 1), 100)
+
+    if doc_type and doc_type not in VALID_DOC_TYPES:
+        raise ValueError(f"Invalid doc_type filter: {doc_type}")
+    if classification and classification not in VALID_CLASSIFICATIONS:
+        raise ValueError(f"Invalid classification filter: {classification}")
+    if status and status not in VALID_STATUSES:
+        raise ValueError(f"Invalid status filter: {status}")
+
+    fts = build_fts_query(query)
+    if not fts.primary:
+        return {"results": [], "query": query, "total": 0, "_metadata": _METADATA_TEMPLATE}
+
+    db = await _get_db(db_path)
+
+    async def _run(match_expr: str) -> tuple[list[dict], int]:
+        async with db.connection() as conn:
+            conditions = ["sections_fts MATCH ?", "d.scope = 'policy_library'"]
+            params: list[Any] = [match_expr]
+
+            if doc_type:
+                conditions.append("d.doc_type = ?")
+                params.append(doc_type)
+            if framework:
+                conditions.append("d.framework_refs LIKE ?")
+                params.append(f"%{framework}%")
+            if classification:
+                conditions.append("d.classification = ?")
+                params.append(classification)
+            if status:
+                conditions.append("d.status = ?")
+                params.append(status)
+
+            where = " AND ".join(conditions)
+
+            sql = f"""
+                SELECT
+                    s.id AS section_id,
+                    s.section_ref,
+                    s.title AS section_title,
+                    s.content,
+                    s.control_refs,
+                    s.framework_refs AS section_framework_refs,
+                    d.doc_id,
+                    d.title AS policy_title,
+                    d.doc_type,
+                    d.classification,
+                    d.framework_refs,
+                    d.owner,
+                    d.version,
+                    d.status,
+                    snippet(sections_fts, 1, '>>>', '<<<', '...', 40) AS snippet,
+                    bm25(sections_fts) AS relevance
+                FROM sections_fts
+                JOIN sections s ON s.id = sections_fts.rowid
+                JOIN documents d ON d.doc_id = s.doc_id
+                WHERE {where}
+                ORDER BY relevance
+                LIMIT ?
+            """
+            params.append(limit)
+            cursor = await conn.execute(sql, params)
+            rows = [dict(r) for r in await cursor.fetchall()]
+
+            # Skip COUNT query when we already have all results
+            if len(rows) < limit:
+                total = len(rows)
+            else:
+                count_sql = f"""
+                    SELECT COUNT(*) AS cnt
+                    FROM sections_fts
+                    JOIN sections s ON s.id = sections_fts.rowid
+                    JOIN documents d ON d.doc_id = s.doc_id
+                    WHERE {where}
+                """
+                count_cursor = await conn.execute(count_sql, params[:-1])
+                total = (await count_cursor.fetchone())["cnt"]
+
+            return rows, total
+
+    results, total = await _run(fts.primary)
+    if not results and fts.fallback:
+        results, total = await _run(fts.fallback)
+
+    # Parse JSON arrays for clean output
+    for r in results:
+        for field in ("control_refs", "framework_refs", "section_framework_refs"):
+            val = r.get(field)
+            if val and isinstance(val, str):
+                try:
+                    r[field] = json.loads(val)
+                except (json.JSONDecodeError, TypeError):
+                    r[field] = []
+            elif not val:
+                r[field] = []
+
+    return {
+        "results": results,
+        "query": query,
+        "total": total,
+        "filters_applied": {
+            k: v for k, v in {
+                "doc_type": doc_type, "framework": framework,
+                "classification": classification, "status": status,
+            }.items() if v
+        },
+        "_metadata": _METADATA_TEMPLATE,
+    }
+
+
+async def update_policy_metadata_tool(
+    doc_id: str,
+    db_path: Path,
+    *,
+    scope: Optional[str] = None,
+    doc_type: Optional[str] = None,
+    classification: Optional[str] = None,
+    status: Optional[str] = None,
+    framework_refs: Optional[list[str]] = None,
+    owner: Optional[str] = None,
+    version: Optional[str] = None,
+    review_date: Optional[str] = None,
+    effective_date: Optional[str] = None,
+) -> dict[str, Any]:
+    """Update GRC metadata on an existing document. Admin override for auto-detected values."""
+    db = await _get_db(db_path)
+
+    updates: list[str] = []
+    params: list[Any] = []
+
+    if scope is not None:
+        if scope not in ("general", "policy_library"):
+            raise ValueError(f"Invalid scope: {scope}")
+        updates.append("scope = ?")
+        params.append(scope)
+    if doc_type is not None:
+        if doc_type not in VALID_DOC_TYPES:
+            raise ValueError(f"Invalid doc_type: {doc_type}")
+        updates.append("doc_type = ?")
+        params.append(doc_type)
+    if classification is not None:
+        if classification not in VALID_CLASSIFICATIONS:
+            raise ValueError(f"Invalid classification: {classification}")
+        updates.append("classification = ?")
+        params.append(classification)
+    if status is not None:
+        if status not in VALID_STATUSES:
+            raise ValueError(f"Invalid status: {status}")
+        updates.append("status = ?")
+        params.append(status)
+    if framework_refs is not None:
+        updates.append("framework_refs = ?")
+        params.append(json.dumps(framework_refs))
+    if owner is not None:
+        updates.append("owner = ?")
+        params.append(owner)
+    if version is not None:
+        updates.append("version = ?")
+        params.append(version)
+    if review_date is not None:
+        updates.append("review_date = ?")
+        params.append(review_date)
+    if effective_date is not None:
+        updates.append("effective_date = ?")
+        params.append(effective_date)
+
+    if not updates:
+        raise ValueError("No fields to update")
+
+    params.append(doc_id)
+
+    async with db.connection() as conn:
+        cursor = await conn.execute(
+            "SELECT doc_id, filename FROM documents WHERE doc_id = ?", (doc_id,)
+        )
+        row = await cursor.fetchone()
+        if not row:
+            raise ValueError(f"Document {doc_id} not found")
+
+        await conn.execute(
+            f"UPDATE documents SET {', '.join(updates)} WHERE doc_id = ?",
+            params,
+        )
+        await conn.commit()
+
+    return {
+        "doc_id": doc_id,
+        "updated_fields": [u.split(" = ")[0] for u in updates],
+        "status": "updated",
         "_metadata": _METADATA_TEMPLATE,
     }
 
