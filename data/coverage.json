@@ -1,0 +1,126 @@
+{
+  "mcp": "Document-Index-MCP",
+  "version": "0.1.0",
+  "updated": "2026-04-08",
+  "formats": [
+    {
+      "extension": ".pdf",
+      "parser": "pdfplumber",
+      "supported": true,
+      "notes": "Cross-page section merging. Scanned PDFs without embedded text are not supported."
+    },
+    {
+      "extension": ".docx",
+      "parser": "python-docx",
+      "supported": true,
+      "notes": "Heading-based section splitting and table extraction."
+    },
+    {
+      "extension": ".xlsx",
+      "parser": "openpyxl",
+      "supported": true,
+      "notes": "One section per sheet. Merged cells may produce incomplete content."
+    },
+    {
+      "extension": ".csv",
+      "parser": "stdlib",
+      "supported": true,
+      "notes": "Single section with full file content."
+    },
+    {
+      "extension": ".pptx",
+      "parser": "python-pptx",
+      "supported": true,
+      "notes": "One section per slide. Speaker notes not indexed."
+    },
+    {
+      "extension": ".html",
+      "parser": "beautifulsoup4",
+      "supported": true,
+      "notes": "Heading-based section splitting. JavaScript-rendered content not supported."
+    },
+    {
+      "extension": ".htm",
+      "parser": "beautifulsoup4",
+      "supported": true,
+      "notes": "Same as .html."
+    },
+    {
+      "extension": ".txt",
+      "parser": "stdlib",
+      "supported": true,
+      "notes": "Heading detection heuristics."
+    },
+    {
+      "extension": ".md",
+      "parser": "stdlib",
+      "supported": true,
+      "notes": "Markdown heading detection."
+    },
+    {
+      "extension": ".png",
+      "parser": "pytesseract",
+      "supported": true,
+      "notes": "OCR via Tesseract. Quality depends on image resolution.",
+      "requires": "tesseract"
+    },
+    {
+      "extension": ".jpg",
+      "parser": "pytesseract",
+      "supported": true,
+      "notes": "OCR via Tesseract.",
+      "requires": "tesseract"
+    },
+    {
+      "extension": ".jpeg",
+      "parser": "pytesseract",
+      "supported": true,
+      "notes": "OCR via Tesseract.",
+      "requires": "tesseract"
+    },
+    {
+      "extension": ".tiff",
+      "parser": "pytesseract",
+      "supported": true,
+      "notes": "OCR via Tesseract.",
+      "requires": "tesseract"
+    },
+    {
+      "extension": ".tif",
+      "parser": "pytesseract",
+      "supported": true,
+      "notes": "OCR via Tesseract.",
+      "requires": "tesseract"
+    },
+    {
+      "extension": ".bmp",
+      "parser": "pytesseract",
+      "supported": true,
+      "notes": "OCR via Tesseract.",
+      "requires": "tesseract"
+    },
+    {
+      "extension": ".gif",
+      "parser": "pytesseract",
+      "supported": true,
+      "notes": "OCR via Tesseract.",
+      "requires": "tesseract"
+    },
+    {
+      "extension": ".webp",
+      "parser": "pytesseract",
+      "supported": true,
+      "notes": "OCR via Tesseract.",
+      "requires": "tesseract"
+    }
+  ],
+  "limitations": [
+    "Scanned PDFs without embedded text are not supported",
+    "OCR quality depends on Tesseract version and image resolution",
+    "XLSX merged cells may produce incomplete section content",
+    "PPTX speaker notes are not indexed",
+    "HTML JavaScript-rendered content is not parsed",
+    "Default file size limit is 50 MB (configurable via MAX_FILE_SIZE_MB)",
+    "FTS5 stemming is English-only; non-Latin scripts index but do not stem"
+  ]
+}
