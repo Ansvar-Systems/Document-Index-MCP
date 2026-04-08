@@ -701,6 +701,66 @@ async def list_supported_formats_tool() -> dict[str, Any]:
     }
 
 
+async def list_sources_tool(db_path: Path) -> dict[str, Any]:
+    """List all indexed document sources with provenance metadata."""
+    db = await _get_db(db_path)
+
+    async with db.connection() as conn:
+        cursor = await conn.execute(
+            "SELECT doc_id, filename, title, file_type, scope, "
+            "upload_date, last_synced, source_ref, owner, version, status "
+            "FROM documents ORDER BY upload_date DESC"
+        )
+        sources = [dict(row) for row in await cursor.fetchall()]
+
+    return {
+        "sources": sources,
+        "count": len(sources),
+        "_metadata": _METADATA_TEMPLATE,
+    }
+
+
+async def check_data_freshness_tool(
+    db_path: Path, stale_days: int = 90
+) -> dict[str, Any]:
+    """Check document freshness — returns age and staleness for each indexed document."""
+    db = await _get_db(db_path)
+    now = datetime.now()
+
+    async with db.connection() as conn:
+        cursor = await conn.execute(
+            "SELECT doc_id, filename, upload_date, last_synced, status "
+            "FROM documents ORDER BY upload_date ASC"
+        )
+        rows = [dict(row) for row in await cursor.fetchall()]
+
+    results = []
+    stale_count = 0
+    for row in rows:
+        indexed_at = row.get("upload_date")
+        age_days = None
+        is_stale = False
+        if indexed_at:
+            try:
+                dt = datetime.fromisoformat(indexed_at)
+                age_days = (now - dt).days
+                is_stale = age_days > stale_days
+            except (ValueError, TypeError):
+                pass
+        if is_stale:
+            stale_count += 1
+        results.append({**row, "age_days": age_days, "is_stale": is_stale})
+
+    return {
+        "documents": results,
+        "total": len(results),
+        "stale_count": stale_count,
+        "stale_threshold_days": stale_days,
+        "checked_at": now.isoformat(),
+        "_metadata": _METADATA_TEMPLATE,
+    }
+
+
 async def get_statistics_tool(db_path: Path) -> dict[str, Any]:
     """Aggregate statistics across all indexed documents."""
     db = await _get_db(db_path)

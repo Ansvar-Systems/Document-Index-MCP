@@ -19,6 +19,8 @@ from .tools import (
     get_surrounding_sections_tool,
     about_tool,
     list_supported_formats_tool,
+    list_sources_tool,
+    check_data_freshness_tool,
 )
 
 DB_PATH = Path(os.getenv("DOCUMENT_INDEX_DB_PATH", "data/documents.db"))
@@ -230,6 +232,31 @@ async def list_tools():
             description="List all file formats this MCP can parse and index, with descriptions.",
             inputSchema={"type": "object", "properties": {}},
         ),
+        Tool(
+            name="list_sources",
+            description=(
+                "List all indexed document sources with provenance metadata: "
+                "filename, file type, scope, upload date, last sync, owner, version, status."
+            ),
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="check_data_freshness",
+            description=(
+                "Check how recently each document was indexed. Returns age in days "
+                "and flags documents older than stale_days (default 90) as stale."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "stale_days": {
+                        "type": "integer",
+                        "default": 90,
+                        "description": "Number of days before a document is considered stale",
+                    }
+                },
+            },
+        ),
     ]
 
 
@@ -279,6 +306,10 @@ async def call_tool(name: str, arguments: dict):
         "get_statistics": lambda args: get_statistics_tool(DB_PATH),
         "about": lambda args: about_tool(),
         "list_supported_formats": lambda args: list_supported_formats_tool(),
+        "list_sources": lambda args: list_sources_tool(DB_PATH),
+        "check_data_freshness": lambda args: check_data_freshness_tool(
+            DB_PATH, stale_days=args.get("stale_days", 90)
+        ),
     }
 
     handler = handlers.get(name)
