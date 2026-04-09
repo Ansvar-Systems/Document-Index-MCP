@@ -25,6 +25,8 @@ from .tools import (
     get_surrounding_sections_tool,
     about_tool,
     list_supported_formats_tool,
+    list_sources_tool,
+    check_data_freshness_tool,
 )
 
 logger = logging.getLogger(__name__)
@@ -252,3 +254,13 @@ async def about():
 @app.get("/formats")
 async def formats():
     return await list_supported_formats_tool()
+
+
+@app.get("/sources")
+async def sources():
+    return await list_sources_tool()
+
+
+@app.get("/freshness")
+async def freshness():
+    return await check_data_freshness_tool(DB_PATH)

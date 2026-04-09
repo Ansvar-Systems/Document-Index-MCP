@@ -1,0 +1,32 @@
+{
+  "mcp_id": "document-index-mcp",
+  "description": "FTS5-indexed document search MCP for large documents (30+ pages).",
+  "supported_formats": [
+    ".pdf",
+    ".docx",
+    ".xlsx",
+    ".csv",
+    ".pptx",
+    ".html",
+    ".htm",
+    ".txt",
+    ".md",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tiff",
+    ".tif",
+    ".bmp",
+    ".gif",
+    ".webp"
+  ],
+  "external_sources": [],
+  "max_file_size_mb": 50,
+  "note": "Coverage is entirely user-provided. No external data feed or scheduled refresh exists.",
+  "known_limitations": [
+    "OCR quality depends on image resolution and Tesseract configuration",
+    "Multi-column PDF layouts may produce interleaved text",
+    "Password-protected documents are not supported",
+    "XLSX formulas are not indexed — only computed values"
+  ]
+}

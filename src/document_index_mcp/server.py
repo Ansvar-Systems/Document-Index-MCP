@@ -19,6 +19,8 @@ from .tools import (
     get_surrounding_sections_tool,
     about_tool,
     list_supported_formats_tool,
+    list_sources_tool,
+    check_data_freshness_tool,
 )
 
 DB_PATH = Path(os.getenv("DOCUMENT_INDEX_DB_PATH", "data/documents.db"))
@@ -230,6 +232,23 @@ async def list_tools():
             description="List all file formats this MCP can parse and index, with descriptions.",
             inputSchema={"type": "object", "properties": {}},
         ),
+        Tool(
+            name="list_sources",
+            description=(
+                "List data sources and provenance: describes user-uploaded document "
+                "ingestion and the parser library used for each file format."
+            ),
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="check_data_freshness",
+            description=(
+                "Report data freshness: returns the most recent upload date and "
+                "document count. Notes that no scheduled refresh applies — data "
+                "currency depends on manual uploads."
+            ),
+            inputSchema={"type": "object", "properties": {}},
+        ),
     ]
 
 
@@ -279,6 +298,8 @@ async def call_tool(name: str, arguments: dict):
         "get_statistics": lambda args: get_statistics_tool(DB_PATH),
         "about": lambda args: about_tool(),
         "list_supported_formats": lambda args: list_supported_formats_tool(),
+        "list_sources": lambda args: list_sources_tool(),
+        "check_data_freshness": lambda args: check_data_freshness_tool(DB_PATH),
     }
 
     handler = handlers.get(name)
