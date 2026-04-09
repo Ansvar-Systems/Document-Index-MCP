@@ -15,6 +15,8 @@ from .tools import (
     MAX_FILE_SIZE,
     index_document_tool,
     search_document_tool,
+    search_company_policies_tool,
+    update_policy_metadata_tool,
     get_section_tool,
     get_document_overview_tool,
     list_documents_tool,
@@ -23,6 +25,8 @@ from .tools import (
     get_surrounding_sections_tool,
     about_tool,
     list_supported_formats_tool,
+    list_sources_tool,
+    check_data_freshness_tool,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,6 +73,27 @@ class SearchRequest(BaseModel):
     query: str
     doc_id: Optional[str] = None
     limit: int = 10
+
+
+class PolicySearchRequest(BaseModel):
+    query: str
+    doc_type: Optional[str] = None
+    framework: Optional[str] = None
+    classification: Optional[str] = None
+    status: Optional[str] = None
+    limit: int = 20
+
+
+class UpdatePolicyMetadataRequest(BaseModel):
+    scope: Optional[str] = None
+    doc_type: Optional[str] = None
+    classification: Optional[str] = None
+    status: Optional[str] = None
+    framework_refs: Optional[list[str]] = None
+    owner: Optional[str] = None
+    version: Optional[str] = None
+    review_date: Optional[str] = None
+    effective_date: Optional[str] = None
 
 
 # --- Unauthenticated health check (override removes app-level auth dependency) ---
@@ -148,6 +173,37 @@ async def search(req: SearchRequest):
     return await search_document_tool(req.query, DB_PATH, doc_id=req.doc_id, limit=req.limit)
 
 
+@app.post("/search-policies")
+async def search_policies(req: PolicySearchRequest):
+    return await search_company_policies_tool(
+        req.query, DB_PATH,
+        doc_type=req.doc_type,
+        framework=req.framework,
+        classification=req.classification,
+        status=req.status,
+        limit=req.limit,
+    )
+
+
+@app.patch("/documents/{doc_id}/metadata")
+async def update_metadata(doc_id: str, req: UpdatePolicyMetadataRequest):
+    try:
+        return await update_policy_metadata_tool(
+            doc_id, DB_PATH,
+            scope=req.scope,
+            doc_type=req.doc_type,
+            classification=req.classification,
+            status=req.status,
+            framework_refs=req.framework_refs,
+            owner=req.owner,
+            version=req.version,
+            review_date=req.review_date,
+            effective_date=req.effective_date,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.get("/documents")
 async def list_documents(limit: int = 100, offset: int = 0):
     return await list_documents_tool(DB_PATH, limit=limit, offset=offset)
@@ -198,3 +254,13 @@ async def about():
 @app.get("/formats")
 async def formats():
     return await list_supported_formats_tool()
+
+
+@app.get("/sources")
+async def sources():
+    return await list_sources_tool()
+
+
+@app.get("/freshness")
+async def freshness():
+    return await check_data_freshness_tool(DB_PATH)
