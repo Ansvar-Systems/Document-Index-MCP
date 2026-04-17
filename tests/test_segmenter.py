@@ -28,3 +28,29 @@ def test_segment_preserves_offsets_exactly():
     spans = segment_sentences(text)
     for start, end, sent_text in spans:
         assert text[start:end] == sent_text
+
+
+def test_segment_does_not_split_on_art():
+    text = "See Art. 33 of the GDPR. It governs breach notification."
+    spans = segment_sentences(text)
+    assert len(spans) == 2
+    assert "Art. 33" in spans[0][2]
+
+
+def test_segment_does_not_split_on_eg_ie():
+    text = "Controllers (e.g. the data exporter) must act. Processors act on instructions."
+    spans = segment_sentences(text)
+    assert len(spans) == 2
+
+
+def test_segment_does_not_split_on_section_symbol():
+    text = "See §4.2 for details. Section references are binding."
+    spans = segment_sentences(text)
+    assert len(spans) == 2
+
+
+def test_segment_does_not_split_on_multi_dot_abbreviations():
+    """e.g., i.e., etc. — dots inside the abbreviation are not boundaries."""
+    text = "Security controls (e.g., MFA, logging, etc.) must be in place. This is not optional."
+    spans = segment_sentences(text)
+    assert len(spans) == 2
