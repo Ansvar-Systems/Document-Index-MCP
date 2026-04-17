@@ -10,7 +10,7 @@ from typing import List, Optional
 from docx import Document
 from .base import BaseParser, ParseResult, Section
 from .docx_table_converter import get_table_paragraph_positions, table_to_markdown
-from .pdf_parser import _is_heading, _make_section_ref, _make_parent_ref
+from .pdf_parser import _make_section_ref, _make_parent_ref
 from .. import PARSER_VERSION
 from ..segmenter import segment_section
 

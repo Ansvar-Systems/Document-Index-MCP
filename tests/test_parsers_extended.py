@@ -5,7 +5,7 @@ Each test creates minimal in-memory documents — no external fixture files requ
 
 import pytest
 from pathlib import Path
-from document_index_mcp.parsers.base import Section, ParseResult
+from document_index_mcp.parsers.base import ParseResult
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +214,6 @@ class TestPPTXParser:
     def test_two_slides_with_titles(self, tmp_path):
         """Two slides with titles produce two sections."""
         from pptx import Presentation
-        from pptx.util import Inches
         from document_index_mcp.parsers.pptx_parser import PPTXParser
 
         prs = Presentation()
@@ -252,7 +251,6 @@ class TestPPTXParser:
         slide = prs.slides.add_slide(blank_layout)
 
         # Add a text box manually
-        from pptx.util import Pt
         txBox = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(2))
         txBox.text_frame.text = "Some content without a title"
 

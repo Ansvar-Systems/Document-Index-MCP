@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from document_index_mcp.parsers.base import Section, Paragraph, Sentence, ParseResult
 from document_index_mcp.parsers.text_parser import TextParser
 from document_index_mcp.parsers.pdf_parser import _is_heading, _make_section_ref, _make_parent_ref

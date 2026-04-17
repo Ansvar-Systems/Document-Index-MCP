@@ -100,7 +100,7 @@ class UpdatePolicyMetadataRequest(BaseModel):
 
 
 # --- Unauthenticated health check (override removes app-level auth dependency) ---
-from fastapi import APIRouter as _APIRouter
+from fastapi import APIRouter as _APIRouter  # noqa: E402
 
 _health_router = _APIRouter(dependencies=[])
 

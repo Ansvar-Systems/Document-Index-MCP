@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from document_index_mcp.tools import (
     index_document_tool,
     search_document_tool,
