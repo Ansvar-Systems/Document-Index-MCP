@@ -165,3 +165,42 @@ def test_text_parser_populates_paragraphs_and_sentences(tmp_path):
         for para in section.paragraphs:
             for sent in para.sentences:
                 assert result.full_text[sent.char_start:sent.char_end] == sent.text
+
+
+def _make_test_pdf(path, lines: list[str]) -> None:
+    """Build a minimal PDF with the given text lines for testing."""
+    try:
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter
+    except ImportError:
+        pytest.skip("reportlab not installed; skipping PDF fixture test")
+    c = canvas.Canvas(str(path), pagesize=letter)
+    y = 750
+    for line in lines:
+        c.drawString(72, y, line)
+        y -= 18
+        if y < 72:
+            c.showPage()
+            y = 750
+    c.save()
+
+
+def test_pdf_parser_populates_paragraphs_and_sentences(tmp_path):
+    from document_index_mcp.parsers.pdf_parser import PDFParser
+    pdf_path = tmp_path / "test.pdf"
+    _make_test_pdf(pdf_path, [
+        "1. Introduction",
+        "First sentence here. Second sentence here.",
+        "Another paragraph. With two sentences.",
+    ])
+    result = PDFParser().parse(pdf_path)
+    assert result.parser_version
+    assert result.full_text
+    assert any(len(s.paragraphs) > 0 for s in result.sections)
+    for section in result.sections:
+        if not section.paragraphs:
+            continue
+        for para in section.paragraphs:
+            for sent in para.sentences:
+                # Offset into full_text must resolve to the sentence text
+                assert result.full_text[sent.char_start:sent.char_end] == sent.text
