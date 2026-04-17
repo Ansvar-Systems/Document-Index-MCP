@@ -1,0 +1,4 @@
+{
+  "filename": "01-short-contract.txt",
+  "expected_sentence_starts": [0, 111, 194, 280, 402]
+}

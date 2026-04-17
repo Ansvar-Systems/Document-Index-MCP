@@ -1,0 +1,4 @@
+{
+  "filename": "06-lettered-list.txt",
+  "expected_sentence_starts": [0, 152, 216, 274, 369, 459]
+}

@@ -203,3 +203,11 @@ Every tool response includes a `_metadata` object:
   }
 }
 ```
+
+---
+
+## /parse (HTTP-only, 0.2.0+)
+
+Stateless parser endpoint. Returns structured section → paragraph → sentence
+tree with char offsets into a canonical `full_text`. Used by the MCP Gateway
+document-upload worker; not registered as an MCP tool.

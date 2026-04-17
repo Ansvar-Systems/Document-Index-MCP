@@ -1,0 +1,3 @@
+Security obligations under Art. 32, §3 of the GDPR require controllers to assess risks, e.g. accidental loss, destruction, or unlawful disclosure of personal data. The assessment must account for state-of-the-art measures, i.e. measures reflecting current best practice.
+
+Documentation must cover all measures taken, including certification bodies, audit findings, etc., and be made available to the supervisory authority on request. Fines under Art. 83, §4 may be levied for failure to maintain adequate documentation.

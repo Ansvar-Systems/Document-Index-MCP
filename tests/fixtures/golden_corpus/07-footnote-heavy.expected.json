@@ -1,0 +1,4 @@
+{
+  "filename": "07-footnote-heavy.txt",
+  "expected_sentence_starts": [0, 108, 193, 298, 375]
+}

@@ -1,0 +1,4 @@
+{
+  "filename": "08-german-gdpr.txt",
+  "expected_sentence_starts": [0, 150, 244, 373]
+}

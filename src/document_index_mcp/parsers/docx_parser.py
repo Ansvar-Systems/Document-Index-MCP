@@ -10,7 +10,9 @@ from typing import List, Optional
 from docx import Document
 from .base import BaseParser, ParseResult, Section
 from .docx_table_converter import get_table_paragraph_positions, table_to_markdown
-from .pdf_parser import _is_heading, _make_section_ref, _make_parent_ref
+from .pdf_parser import _make_section_ref, _make_parent_ref
+from .. import PARSER_VERSION
+from ..segmenter import segment_section
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,41 @@ _MAX_ALLCAPS_LEN = 60
 _MAX_ALLCAPS_WORDS = 8
 _MIN_FONT_DELTA_PT = 2.0
 _BOLD_MAJORITY_THRESHOLD = 0.5
+
+_SECTION_SEPARATOR = "\n\n"
+
+
+def _append_section_with_paragraphs(
+    sections: list,
+    full_text_parts: list,
+    full_text_cursor: int,
+    *,
+    title: str,
+    content: str,
+    section_ref: str,
+    page_start: int | None,
+    page_end: int | None,
+    parent_ref: str | None,
+) -> int:
+    """Append a Section to `sections` and return the updated full_text_cursor."""
+    section_start = full_text_cursor
+    full_text_parts.append(content)
+    section_end = section_start + len(content)
+    new_cursor = section_end + len(_SECTION_SEPARATOR)
+    full_text_parts.append(_SECTION_SEPARATOR)
+    paragraphs = segment_section(content, base_offset=section_start)
+    sections.append(Section(
+        title=title,
+        content=content,
+        section_ref=section_ref,
+        page_start=page_start,
+        page_end=page_end,
+        parent_ref=parent_ref,
+        char_start=section_start,
+        char_end=section_end,
+        paragraphs=paragraphs,
+    ))
+    return new_cursor
 
 
 def _compute_body_font_size(doc) -> Optional[float]:
@@ -260,8 +297,11 @@ class DOCXParser(BaseParser):
                     section_ref="page-1",
                 )],
                 raw_text="",
+                full_text="",
                 page_count=1,
                 metadata={"parser": "docx-failed", "error": "BadZipFile"},
+                parser_version=PARSER_VERSION,
+                language="en",
             )
 
         raw_text = "\n".join(paragraphs)
@@ -274,8 +314,11 @@ class DOCXParser(BaseParser):
                     section_ref="page-1",
                 )],
                 raw_text="",
+                full_text="",
                 page_count=1,
                 metadata={"parser": "docx-zip-fallback", "error": "no_text_extracted"},
+                parser_version=PARSER_VERSION,
+                language="en",
             )
 
         # Use TextParser to detect sections (it handles section_ref)
@@ -298,10 +341,13 @@ class DOCXParser(BaseParser):
 
         return ParseResult(
             filename=file_path.name,
-            sections=sections,
+            sections=text_result.sections,
             raw_text=raw_text,
+            full_text=text_result.full_text,
             page_count=1,
             metadata={"parser": "docx-zip-fallback", "paragraph_count": len(paragraphs)},
+            parser_version=PARSER_VERSION,
+            language="en",
         )
 
     def _parse_standard(self, file_path: Path, doc) -> ParseResult:
@@ -336,6 +382,8 @@ class DOCXParser(BaseParser):
         current_section_page = 1
         paragraph_index = 0
         section_index = 0
+        full_text_parts: list[str] = []
+        full_text_cursor = 0
 
         for para in doc.paragraphs:
             if paragraph_index in table_map:
@@ -362,13 +410,15 @@ class DOCXParser(BaseParser):
             if is_heading:
                 if current_section_title:
                     ref = _make_section_ref(current_section_title, section_index)
-                    sections.append(Section(
+                    full_text_cursor = _append_section_with_paragraphs(
+                        sections, full_text_parts, full_text_cursor,
                         title=current_section_title,
                         content='\n'.join(current_section_content),
                         section_ref=ref,
                         page_start=current_section_page,
+                        page_end=None,
                         parent_ref=_make_parent_ref(ref),
-                    ))
+                    )
                     section_index += 1
                 current_section_title = text
                 current_section_content = []
@@ -385,13 +435,15 @@ class DOCXParser(BaseParser):
 
         if current_section_title:
             ref = _make_section_ref(current_section_title, section_index)
-            sections.append(Section(
+            full_text_cursor = _append_section_with_paragraphs(
+                sections, full_text_parts, full_text_cursor,
                 title=current_section_title,
                 content='\n'.join(current_section_content),
                 section_ref=ref,
                 page_start=current_section_page,
+                page_end=None,
                 parent_ref=_make_parent_ref(ref),
-            ))
+            )
 
         detection_method = "style"
 
@@ -412,6 +464,24 @@ class DOCXParser(BaseParser):
             ))
             detection_method = "single"
 
+        # If full_text_parts is empty (fallback path produced sections via
+        # _parse_with_formatting or _parse_with_patterns), rebuild full_text
+        # from those sections and populate their paragraphs.
+        if not full_text_parts and sections:
+            rebuilt_parts: list[str] = []
+            cursor = 0
+            for sec in sections:
+                sec.char_start = cursor
+                rebuilt_parts.append(sec.content)
+                cursor += len(sec.content)
+                sec.char_end = cursor
+                sec.paragraphs = segment_section(sec.content, base_offset=sec.char_start)
+                rebuilt_parts.append(_SECTION_SEPARATOR)
+                cursor += len(_SECTION_SEPARATOR)
+            full_text = "".join(rebuilt_parts).rstrip(_SECTION_SEPARATOR)
+        else:
+            full_text = "".join(full_text_parts).rstrip(_SECTION_SEPARATOR)
+
         max_page = page_map[-1] if page_map else (
             _estimate_page(paragraph_index - 1) if paragraph_index else 1
         )
@@ -420,6 +490,7 @@ class DOCXParser(BaseParser):
             filename=file_path.name,
             sections=sections,
             raw_text='\n'.join(raw_text),
+            full_text=full_text,
             page_count=max(len(doc.sections), max_page),
             metadata={
                 "parser": "python-docx",
@@ -427,7 +498,9 @@ class DOCXParser(BaseParser):
                 "table_count": len(table_markdowns),
                 "section_detection": detection_method,
                 "page_source": "explicit_breaks" if has_page_breaks else "estimated",
-            }
+            },
+            parser_version=PARSER_VERSION,
+            language="en",
         )
 
     def _parse_with_formatting(

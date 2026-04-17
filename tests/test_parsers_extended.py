@@ -5,7 +5,7 @@ Each test creates minimal in-memory documents — no external fixture files requ
 
 import pytest
 from pathlib import Path
-from document_index_mcp.parsers.base import Section, ParseResult
+from document_index_mcp.parsers.base import ParseResult
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +214,6 @@ class TestPPTXParser:
     def test_two_slides_with_titles(self, tmp_path):
         """Two slides with titles produce two sections."""
         from pptx import Presentation
-        from pptx.util import Inches
         from document_index_mcp.parsers.pptx_parser import PPTXParser
 
         prs = Presentation()
@@ -252,7 +251,6 @@ class TestPPTXParser:
         slide = prs.slides.add_slide(blank_layout)
 
         # Add a text box manually
-        from pptx.util import Pt
         txBox = slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(2))
         txBox.text_frame.text = "Some content without a title"
 
@@ -371,3 +369,24 @@ class TestImageParser:
         assert result.metadata["parser"] == "pytesseract"
         assert "10x10" in result.metadata["image_size"]
         assert result.filename == "white.png"
+
+
+def test_docx_parser_populates_paragraphs(tmp_path):
+    from docx import Document
+    from document_index_mcp.parsers.docx_parser import DOCXParser
+
+    docx_path = tmp_path / "test.docx"
+    doc = Document()
+    doc.add_heading("1. Introduction", level=1)
+    doc.add_paragraph("First sentence here. Second sentence here.")
+    doc.add_paragraph("Another paragraph. With two sentences.")
+    doc.save(docx_path)
+
+    result = DOCXParser().parse(docx_path)
+    assert result.parser_version
+    assert result.full_text
+    assert any(len(s.paragraphs) > 0 for s in result.sections)
+    for section in result.sections:
+        for para in section.paragraphs:
+            for sent in para.sentences:
+                assert result.full_text[sent.char_start:sent.char_end] == sent.text
