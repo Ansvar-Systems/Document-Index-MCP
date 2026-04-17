@@ -121,3 +121,17 @@ def test_segment_section_yields_paragraphs_and_sentences():
         for sent in para.sentences:
             assert para.char_start <= sent.char_start
             assert sent.char_end <= para.char_end
+
+
+def test_etc_end_of_sentence_splits():
+    text = "Install controls (MFA, logging, etc.) on all systems. Document them in the ISMS."
+    spans = segment_sentences(text)
+    # etc. inside parentheses followed by "on" (lowercase) does not split
+    assert len(spans) == 2
+
+
+def test_etc_end_of_sentence_with_capital_next():
+    text = "Controls include MFA, logging, etc. Document them annually."
+    spans = segment_sentences(text)
+    # etc. at end of sentence followed by capital "Document" DOES split
+    assert len(spans) == 2

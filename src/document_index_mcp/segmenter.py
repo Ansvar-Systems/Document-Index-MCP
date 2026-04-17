@@ -54,6 +54,12 @@ def _is_abbreviation_terminator(text: str, term_start: int, term_char: str) -> b
 
     Only applies to `.` — `!` and `?` are always sentence-ending.
     The `§` (section) sign is not a terminator; it's a content character.
+
+    Special case: `etc.` followed by a capital letter is treated as sentence-ending,
+    not as an abbreviation. "Install controls (MFA, logging, etc.) on all systems."
+    keeps `etc.)` as abbreviation (next char is `)`, not uppercase). But
+    "Security controls include MFA, logging, etc. Controllers must review them."
+    splits after `etc.` because the next non-whitespace char is uppercase `C`.
     """
     if term_char != ".":
         return False
@@ -76,7 +82,17 @@ def _is_abbreviation_terminator(text: str, term_start: int, term_char: str) -> b
     # A single-letter initial like "U" in "U.S." or "A" in "A. B. C." is an abbreviation.
     if len(word) == 1:
         return True
-    return word in _ABBREVIATIONS
+    if word in _ABBREVIATIONS:
+        # Special case: `etc.` at end of sentence followed by a capitalized word is
+        # sentence-ending, not an abbreviation. e.g. "...measures, etc. Controllers..."
+        # Only triggers when the FIRST non-whitespace character after the period is
+        # uppercase — indicating a new sentence begins.
+        if word == "etc":
+            rest = text[term_start + 1:].lstrip()
+            if rest and rest[0].isupper():
+                return False  # treat as sentence-ending
+        return True
+    return False
 
 
 # List item patterns — triggers a secondary split within a coarse sentence.

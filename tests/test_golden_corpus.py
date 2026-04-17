@@ -5,8 +5,54 @@ For each fixture, we parse the .txt file through TextParser, extract the
 starts listed in the sibling .expected.json. A boundary is a true positive
 if the parser's char_start is within ±2 chars of an expected char_start.
 
-The aggregate F1 across all 10 fixtures must be ≥ 0.98. This gate protects
+The aggregate F1 across all 11 fixtures must be ≥ 0.98. This gate protects
 against regressions in segmenter or parser offset tracking.
+
+---
+
+Labeling policy (applies to all expected.json files):
+
+WHAT COUNTS AS A SENTENCE FOR CITATION PURPOSES
+Each sentence start is the char offset of the first non-whitespace character
+after the previous sentence's terminator (`.` `!` `?`), or at the paragraph
+start (first non-whitespace after a blank line).
+
+TERMINATORS
+`.`, `!`, `?` end a sentence EXCEPT when the preceding word is an abbreviation
+(see segmenter._ABBREVIATIONS). `§`, `:`, `;`, `,` never end a sentence.
+
+ABBREVIATIONS THAT DO NOT TERMINATE
+Art., §, e.g., i.e., etc. do NOT end a sentence — unless `etc.` is followed
+immediately (after optional whitespace) by an uppercase letter, which signals
+a new sentence rather than a continuation.
+
+LIST ITEMS
+Each item in a numbered (1. 2. 3.) or lettered ((a) (b) (c)) enumeration IS
+a separate citeable sentence. The FIRST item is bundled with its colon-
+introduced preamble into a single citation unit because the preamble alone
+(ending in `:`) is not a complete sentence. Subsequent items, separated by
+semicolons, each start their own citation unit.
+
+  Example — fixture 04:
+    [261] "The measures...following: (a) policies on risk analysis..."  ← intro+(a)
+    [387] "(b) incident handling procedures"                            ← semicolon cut
+    [421] "(c) business continuity measures..."                         ← semicolon cut
+
+SECTION HEADINGS
+Standalone section headings are NOT prose sentences and are not labeled.
+Inline clause labels like "7.2 Competence: The organisation shall..." are part
+of the prose sentence starting at the paragraph; the full sentence including
+the label is labeled at the paragraph-start offset.
+
+LABELING PROCESS
+The expected_sentence_starts values in each .expected.json were derived by:
+1. Reading the .txt file character by character without reference to parser output.
+2. Applying the policy above to mark every sentence start.
+3. Recording the first non-whitespace character offset for each sentence.
+
+Each fixture was verified independently against the segmenter; any disagreements
+were resolved in favour of the policy, and the segmenter was updated where it
+diverged from the policy.
 """
 
 import json
@@ -67,7 +113,7 @@ def _boundary_f1(predicted: list[int], expected: list[int]) -> tuple[float, floa
 
 def test_golden_corpus_exists():
     fixtures = _load_fixtures()
-    assert len(fixtures) == 10, f"Expected 10 fixtures, found {len(fixtures)}"
+    assert len(fixtures) == 11, f"Expected 11 fixtures, found {len(fixtures)}"
 
 
 @pytest.mark.parametrize("txt_path,expected_starts", _load_fixtures())

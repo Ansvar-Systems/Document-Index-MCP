@@ -1,0 +1,1 @@
+Security controls must be proportionate, including MFA, logging, encryption, etc. Controllers must review these controls annually. Assessments should cover physical, technical, and administrative measures, etc. Any gaps are documented in an annual report, with remediation plans, etc. Reviews occur in Q1 each year.
