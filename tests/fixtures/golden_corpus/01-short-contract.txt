@@ -1,0 +1,3 @@
+"Controller" means the natural or legal person determining the purposes and means of processing personal data. "Processor" means an entity processing personal data on behalf of the Controller.
+
+The Processor shall process data only on documented instructions from the Controller. The Processor shall ensure that persons authorised to process personal data have committed themselves to confidentiality. The Processor shall implement security measures pursuant to Art. 32 of the GDPR.

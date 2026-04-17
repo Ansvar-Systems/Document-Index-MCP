@@ -1,0 +1,3 @@
+Der Verantwortliche hat geeignete technische und organisatorische Maßnahmen zu treffen, um ein dem Risiko angemessenes Schutzniveau zu gewährleisten. Dies umfasst insbesondere die Pseudonymisierung und Verschlüsselung personenbezogener Daten.
+
+Bei der Beurteilung des angemessenen Schutzniveaus sind die Risiken zu berücksichtigen, die mit der Verarbeitung verbunden sind. Der Verantwortliche und der Auftragsverarbeiter ergreifen Maßnahmen, um sicherzustellen, dass jede natürliche Person, die dem Verantwortlichen untersteht, nur auf Weisung handelt.

@@ -1,0 +1,5 @@
+The organisation shall determine the external and internal issues relevant to its purpose that affect its ability to achieve the intended outcomes of its information security management system. The organisation shall determine the interested parties that are relevant to the information security management system.
+
+7.2 Competence: The organisation shall determine the necessary competence of persons doing work under its control that affects its information security performance. The organisation shall ensure that these persons are competent on the basis of appropriate education, training, or experience.
+
+7.3 Awareness: Persons doing work under the organisation's control shall be aware of the information security policy. They shall be aware of their contribution to the effectiveness of the information security management system.

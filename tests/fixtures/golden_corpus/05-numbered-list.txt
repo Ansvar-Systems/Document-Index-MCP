@@ -1,0 +1,3 @@
+Access control requirements are set out in sections 1.1.1 through 1.1.4 of this policy. All employees must comply with these requirements without exception.
+
+Users shall: 1. authenticate using approved multi-factor methods; 2. lock workstations after five minutes of inactivity; 3. report lost or stolen credentials within one hour. Violations of section 1.1.2 or 1.1.3 may result in immediate suspension of access rights.

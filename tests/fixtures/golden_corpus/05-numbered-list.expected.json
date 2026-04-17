@@ -1,0 +1,4 @@
+{
+  "filename": "05-numbered-list.txt",
+  "expected_sentence_starts": [0, 88, 158, 224, 279, 333]
+}

@@ -1,0 +1,3 @@
+The right to erasure [1] applies where the data subject withdraws consent on which the processing is based. Controllers must act without undue delay [2] upon receiving a valid erasure request. The obligation does not apply where processing is necessary for compliance with a legal obligation [3].
+
+Retention periods must be documented in the record of processing activities. Data retained beyond the stated period constitutes a breach of the principle of storage limitation [4].
