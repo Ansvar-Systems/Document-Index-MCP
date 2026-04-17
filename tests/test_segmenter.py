@@ -1,4 +1,5 @@
-from document_index_mcp.segmenter import segment_paragraphs, segment_sentences
+from document_index_mcp.parsers.base import Paragraph, Sentence
+from document_index_mcp.segmenter import segment_paragraphs, segment_section, segment_sentences
 
 
 def test_segment_single_sentence():
@@ -101,3 +102,22 @@ def test_paragraphs_offsets_exact():
     paras = segment_paragraphs(text)
     for start, end, ptext in paras:
         assert text[start:end] == ptext
+
+
+def test_segment_section_yields_paragraphs_and_sentences():
+    text = "Intro sentence one. Intro sentence two.\n\nSecond para first. Second para second."
+    base = 100  # pretend this text starts at offset 100 in full_text
+    paras = segment_section(text, base_offset=base)
+    assert isinstance(paras, list)
+    assert len(paras) == 2
+    assert all(isinstance(p, Paragraph) for p in paras)
+    # Offsets are absolute, shifted by base
+    assert paras[0].char_start == 100
+    # Sentences populated
+    assert len(paras[0].sentences) == 2
+    assert all(isinstance(s, Sentence) for s in paras[0].sentences)
+    # Sentence offsets are also absolute and consistent with paragraph range
+    for para in paras:
+        for sent in para.sentences:
+            assert para.char_start <= sent.char_start
+            assert sent.char_end <= para.char_end

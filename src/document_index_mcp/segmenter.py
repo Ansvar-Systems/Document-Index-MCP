@@ -8,7 +8,10 @@ char_end, text) tuples where offsets are into the input string.
 from __future__ import annotations
 
 import re
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Tuple
+
+if TYPE_CHECKING:
+    from .parsers.base import Paragraph
 
 Span = Tuple[int, int, str]
 
@@ -208,3 +211,33 @@ def segment_paragraphs(text: str) -> List[Span]:
         spans.append((s, e, text[s:e]))
 
     return spans
+
+
+def segment_section(text: str, base_offset: int = 0) -> List["Paragraph"]:
+    """Segment `text` into Paragraph objects (with Sentence children) whose
+    offsets are absolute (shifted by `base_offset`).
+
+    Imported locally to avoid a circular dependency — parsers/base defines
+    the dataclasses this helper constructs.
+    """
+    from .parsers.base import Paragraph, Sentence
+
+    paragraphs: List[Paragraph] = []
+    for p_idx, (p_start, p_end, p_text) in enumerate(segment_paragraphs(text)):
+        sentence_spans = segment_sentences(p_text)
+        sentences = [
+            Sentence(
+                sentence_index=s_idx,
+                char_start=base_offset + p_start + s_start,
+                char_end=base_offset + p_start + s_end,
+                text=s_text,
+            )
+            for s_idx, (s_start, s_end, s_text) in enumerate(sentence_spans)
+        ]
+        paragraphs.append(Paragraph(
+            paragraph_index=p_idx,
+            char_start=base_offset + p_start,
+            char_end=base_offset + p_end,
+            sentences=sentences,
+        ))
+    return paragraphs
