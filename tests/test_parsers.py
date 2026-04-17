@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from document_index_mcp.parsers.base import Section
+from document_index_mcp.parsers.base import Section, Paragraph, Sentence, ParseResult
 from document_index_mcp.parsers.text_parser import TextParser
 from document_index_mcp.parsers.pdf_parser import _is_heading, _make_section_ref, _make_parent_ref
 
@@ -98,3 +98,45 @@ def test_make_parent_ref():
     assert _make_parent_ref("s2.1") == "s2"
     assert _make_parent_ref("s2.1.3") == "s2.1"
     assert _make_parent_ref("s2") is None
+
+
+def test_sentence_dataclass_shape():
+    s = Sentence(sentence_index=0, char_start=10, char_end=42, text="Hello world.")
+    assert s.sentence_index == 0
+    assert s.char_start == 10
+    assert s.char_end == 42
+    assert s.text == "Hello world."
+
+
+def test_paragraph_dataclass_has_sentences():
+    para = Paragraph(
+        paragraph_index=0,
+        char_start=0,
+        char_end=50,
+        sentences=[Sentence(sentence_index=0, char_start=0, char_end=50, text="x")],
+    )
+    assert len(para.sentences) == 1
+
+
+def test_section_paragraphs_default_empty():
+    """Backward compat: existing callers that construct Section without paragraphs must still work."""
+    s = Section(title="T", content="c", section_ref="s1")
+    assert s.paragraphs == []
+    assert s.char_start is None
+    assert s.char_end is None
+
+
+def test_parse_result_has_full_text_and_parser_version():
+    r = ParseResult(
+        filename="x.txt",
+        sections=[],
+        raw_text="hello",
+        full_text="hello",
+        page_count=1,
+        metadata={},
+        parser_version="0.2.0",
+        language="en",
+    )
+    assert r.full_text == "hello"
+    assert r.parser_version == "0.2.0"
+    assert r.language == "en"
