@@ -11,6 +11,9 @@ from fastapi import Depends, FastAPI, HTTPException, Security
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
+from .parsers.docx_parser import DOCXParser
+from .parsers.pdf_parser import PDFParser
+from .parsers.text_parser import TextParser
 from .tools import (
     MAX_FILE_SIZE,
     index_document_tool,
@@ -264,3 +267,92 @@ async def sources():
 @app.get("/freshness")
 async def freshness():
     return await check_data_freshness_tool(DB_PATH)
+
+
+# --- /parse endpoint: stateless parser (new in 0.2.0, used by Ansvar MCP Gateway) ---
+
+
+class ParseRequest(BaseModel):
+    filename: str
+    content_base64: str
+
+
+_SUPPORTED_EXTENSIONS = {
+    ".pdf": PDFParser,
+    ".docx": DOCXParser,
+    ".txt": TextParser,
+    ".md": TextParser,
+}
+
+
+@app.post("/parse")
+async def parse_document(req: ParseRequest):
+    """Parse a document and return structured output with sentence-level offsets.
+
+    This is the entry point the MCP Gateway ingestion worker calls. Unlike
+    /index (which writes to this MCP's SQLite), /parse is a pure function —
+    bytes in, structured JSON out. The caller owns persistence.
+    """
+    if not req.content_base64:
+        raise HTTPException(status_code=400, detail="Empty content_base64")
+    try:
+        content = base64.b64decode(req.content_base64, validate=True)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid base64 content")
+
+    suffix = Path(req.filename).suffix.lower()
+    parser_cls = _SUPPORTED_EXTENSIONS.get(suffix)
+    if parser_cls is None:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported content type: {suffix}. Supported: {list(_SUPPORTED_EXTENSIONS)}",
+        )
+
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
+        f.write(content)
+        tmp_path = Path(f.name)
+    try:
+        parser = parser_cls()
+        result = parser.parse(tmp_path)
+        # Convert dataclasses to dicts for JSON response
+        return {
+            "filename": result.filename,
+            "full_text": result.full_text,
+            "raw_text": result.raw_text,
+            "page_count": result.page_count,
+            "parser_version": result.parser_version,
+            "language": result.language,
+            "metadata": result.metadata,
+            "sections": [
+                {
+                    "title": s.title,
+                    "content": s.content,
+                    "section_ref": s.section_ref,
+                    "page_start": s.page_start,
+                    "page_end": s.page_end,
+                    "parent_ref": s.parent_ref,
+                    "char_start": s.char_start,
+                    "char_end": s.char_end,
+                    "paragraphs": [
+                        {
+                            "paragraph_index": p.paragraph_index,
+                            "char_start": p.char_start,
+                            "char_end": p.char_end,
+                            "sentences": [
+                                {
+                                    "sentence_index": snt.sentence_index,
+                                    "char_start": snt.char_start,
+                                    "char_end": snt.char_end,
+                                    "text": snt.text,
+                                }
+                                for snt in p.sentences
+                            ],
+                        }
+                        for p in s.paragraphs
+                    ],
+                }
+                for s in result.sections
+            ],
+        }
+    finally:
+        tmp_path.unlink(missing_ok=True)
