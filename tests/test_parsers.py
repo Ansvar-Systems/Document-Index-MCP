@@ -140,3 +140,28 @@ def test_parse_result_has_full_text_and_parser_version():
     assert r.full_text == "hello"
     assert r.parser_version == "0.2.0"
     assert r.language == "en"
+
+
+def test_text_parser_populates_paragraphs_and_sentences(tmp_path):
+    doc = tmp_path / "test.txt"
+    doc.write_text(
+        "1. Introduction\n"
+        "First sentence here. Second sentence here.\n"
+        "\n"
+        "Another paragraph. With two sentences.\n"
+    )
+    parser = TextParser()
+    result = parser.parse(doc)
+    assert result.parser_version  # populated
+    assert result.full_text       # populated
+    # At least one section with paragraphs
+    assert any(len(s.paragraphs) > 0 for s in result.sections)
+    # Offsets into full_text resolve back to the expected text
+    for section in result.sections:
+        if section.char_start is None:
+            continue
+        assert result.full_text[section.char_start:section.char_end] == section.content or \
+               section.content in result.full_text[section.char_start:section.char_end]
+        for para in section.paragraphs:
+            for sent in para.sentences:
+                assert result.full_text[sent.char_start:sent.char_end] == sent.text
