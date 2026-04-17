@@ -168,3 +168,43 @@ def segment_sentences(text: str) -> List[Span]:
     for s_start, s_end, _ in coarse:
         fine.extend(_split_on_list_markers(s_start, s_end, text))
     return fine
+
+
+# Paragraph boundary: two or more consecutive newlines (optionally with whitespace).
+_PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n+")
+
+
+def segment_paragraphs(text: str) -> List[Span]:
+    """Split text into paragraphs on blank lines.
+
+    Returns list of (char_start, char_end, paragraph_text). Each span excludes
+    trailing newlines; `text[start:end]` equals the third tuple element.
+    """
+    if not text:
+        return []
+
+    spans: List[Span] = []
+    start = 0
+    for m in _PARAGRAPH_BREAK.finditer(text):
+        end = m.start()
+        para = text[start:end].strip()
+        if para:
+            # Compute offsets after stripping leading/trailing whitespace.
+            raw = text[start:end]
+            leading = len(raw) - len(raw.lstrip())
+            trailing = len(raw) - len(raw.rstrip())
+            s = start + leading
+            e = end - trailing
+            spans.append((s, e, text[s:e]))
+        start = m.end()
+
+    # Final paragraph (after last break).
+    remainder = text[start:].strip()
+    if remainder:
+        raw = text[start:]
+        leading = len(raw) - len(raw.lstrip())
+        s = start + leading
+        e = s + len(remainder)
+        spans.append((s, e, text[s:e]))
+
+    return spans

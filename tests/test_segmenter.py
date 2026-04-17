@@ -1,4 +1,4 @@
-from document_index_mcp.segmenter import segment_sentences
+from document_index_mcp.segmenter import segment_paragraphs, segment_sentences
 
 
 def test_segment_single_sentence():
@@ -74,3 +74,30 @@ def test_segment_lettered_list_items():
     text = "Factors include: (a) intent; (b) scale; (c) harm. These guide enforcement."
     spans = segment_sentences(text)
     assert len(spans) >= 2
+
+
+def test_paragraphs_split_on_blank_line():
+    text = "First paragraph line 1.\nFirst paragraph line 2.\n\nSecond paragraph."
+    paras = segment_paragraphs(text)
+    assert len(paras) == 2
+    assert paras[0][2].startswith("First paragraph")
+    assert paras[1][2] == "Second paragraph."
+
+
+def test_paragraphs_single_paragraph():
+    text = "Only one paragraph here. It has two sentences."
+    paras = segment_paragraphs(text)
+    assert len(paras) == 1
+    assert paras[0][0] == 0
+    assert paras[0][1] == len(text)
+
+
+def test_paragraphs_empty_text():
+    assert segment_paragraphs("") == []
+
+
+def test_paragraphs_offsets_exact():
+    text = "P1 line 1.\n\nP2 first. P2 second."
+    paras = segment_paragraphs(text)
+    for start, end, ptext in paras:
+        assert text[start:end] == ptext
