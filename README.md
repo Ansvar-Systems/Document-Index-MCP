@@ -75,6 +75,36 @@ See [TOOLS.md](TOOLS.md) for complete parameter and response documentation.
 | GET | `/about` | Server info |
 | GET | `/formats` | Supported formats |
 
+## HTTP API — `/parse` (new in 0.2.0)
+
+For callers that need structured parser output without persistence (e.g. the
+Ansvar MCP Gateway document-upload ingestion worker), POST to `/parse`:
+
+```json
+POST /parse
+{
+  "filename": "acme-dpa.pdf",
+  "content_base64": "<base64 bytes>"
+}
+```
+
+Response includes:
+
+- `full_text`: canonical contiguous document text (char offsets below are into this string).
+- `sections`: list of sections, each with `char_start`, `char_end`, `paragraphs`.
+- `paragraphs`: list with `paragraph_index`, `char_start`, `char_end`, `sentences`.
+- `sentences`: list with `sentence_index`, `char_start`, `char_end`, `text`.
+- `parser_version`: e.g. `"0.2.0"`.
+- `language`: ISO 639-1 code.
+
+Offsets are zero-based, half-open: `full_text[char_start:char_end]` equals the
+associated `text`. Supported content types: PDF, DOCX, TXT, MD. Other
+content-types return HTTP 415.
+
+The existing `/index`, `/search`, `/documents` endpoints are unchanged; they
+continue to use this MCP's internal SQLite/FTS5. `/parse` is stateless: no row
+is written to any DB.
+
 ## Architecture
 
 ```

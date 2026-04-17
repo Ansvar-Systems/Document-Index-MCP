@@ -51,7 +51,7 @@ async def verify_api_key(api_key: Optional[str] = Security(_api_key_header)):
 # Initialize FastAPI app — all endpoints require API key when MCP_API_KEY is set
 app = FastAPI(
     title="Document-Index-MCP",
-    version="0.1.0",
+    version="0.2.0",
     dependencies=[Depends(verify_api_key)],
 )
 
@@ -110,7 +110,7 @@ async def health():
     return {
         "status": "healthy",
         "server": "Document-Index-MCP",
-        "version": "0.1.0",
+        "version": "0.2.0",
     }
 
 

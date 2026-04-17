@@ -1,6 +1,6 @@
 [project]
 name = "document-index-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "FTS5-indexed document search MCP — large document ingestion using the Law MCP pattern"
 requires-python = ">=3.11"
 dependencies = [
