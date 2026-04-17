@@ -24,7 +24,7 @@ _ABBREVIATIONS = frozenset({
     "ch", "chap", "chaps",   # Chapter(s)
     "para", "paras",         # Paragraph(s)
     "no", "nos",             # Number(s)
-    "vs", "vs",              # versus
+    "vs",                    # versus
     "eg", "ie", "etc",       # e.g., i.e., etc.
     "mr", "mrs", "ms", "dr", # titles
     "jr", "sr",              # suffixes
@@ -254,6 +254,7 @@ def segment_section(text: str, base_offset: int = 0) -> List["Paragraph"]:
             paragraph_index=p_idx,
             char_start=base_offset + p_start,
             char_end=base_offset + p_end,
+            text=p_text,
             sentences=sentences,
         ))
     return paragraphs

@@ -21,6 +21,7 @@ class Paragraph:
     paragraph_index: int
     char_start: int
     char_end: int
+    text: str = ""
     sentences: List[Sentence] = field(default_factory=list)
 
 

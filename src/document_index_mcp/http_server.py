@@ -318,7 +318,6 @@ async def parse_document(req: ParseRequest):
         return {
             "filename": result.filename,
             "full_text": result.full_text,
-            "raw_text": result.raw_text,
             "page_count": result.page_count,
             "parser_version": result.parser_version,
             "language": result.language,
@@ -338,6 +337,7 @@ async def parse_document(req: ParseRequest):
                             "paragraph_index": p.paragraph_index,
                             "char_start": p.char_start,
                             "char_end": p.char_end,
+                            "text": p.text,
                             "sentences": [
                                 {
                                     "sentence_index": snt.sentence_index,

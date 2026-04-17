@@ -31,6 +31,8 @@ def test_parse_endpoint_returns_structured_output():
     assert "language" in body
     assert body["parser_version"]  # non-empty
     assert len(body["sections"]) >= 1
+    # raw_text deliberately NOT included in /parse response (redundant with full_text)
+    assert "raw_text" not in body
     section = body["sections"][0]
     assert "paragraphs" in section
     assert "char_start" in section

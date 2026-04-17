@@ -135,3 +135,15 @@ def test_etc_end_of_sentence_with_capital_next():
     spans = segment_sentences(text)
     # etc. at end of sentence followed by capital "Document" DOES split
     assert len(spans) == 2
+
+
+def test_segment_section_populates_paragraph_text():
+    text = "First sentence. Second sentence.\n\nSecond para only."
+    paras = segment_section(text, base_offset=0)
+    assert len(paras) == 2
+    # Paragraph text is the slice from the original input
+    assert paras[0].text == "First sentence. Second sentence."
+    assert paras[1].text == "Second para only."
+    # Round-trip: the text equals the range from the source text
+    for p in paras:
+        assert text[p.char_start:p.char_end] == p.text
