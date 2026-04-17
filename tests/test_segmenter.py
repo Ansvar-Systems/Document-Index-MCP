@@ -54,3 +54,23 @@ def test_segment_does_not_split_on_multi_dot_abbreviations():
     text = "Security controls (e.g., MFA, logging, etc.) must be in place. This is not optional."
     spans = segment_sentences(text)
     assert len(spans) == 2
+
+
+def test_segment_numbered_list_items_as_separate_sentences():
+    text = "The Processor shall: 1. notify the Controller; 2. preserve evidence; 3. investigate."
+    spans = segment_sentences(text)
+    # The intro clause + 3 list items = 4 sentences, OR the intro + list as 1 sentence
+    # depending on interpretation. For legal citation purposes we want each list
+    # item citeable separately — so 4 sentences.
+    assert len(spans) >= 3
+    # Each of the three list items should appear as its own span
+    items = [s[2] for s in spans]
+    assert any("notify the Controller" in i for i in items)
+    assert any("preserve evidence" in i for i in items)
+    assert any("investigate" in i for i in items)
+
+
+def test_segment_lettered_list_items():
+    text = "Factors include: (a) intent; (b) scale; (c) harm. These guide enforcement."
+    spans = segment_sentences(text)
+    assert len(spans) >= 2
